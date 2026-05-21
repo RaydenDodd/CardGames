@@ -1,308 +1,202 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>F*** The Dealer</title>
-
-<style>
-body{
-  margin:0;
-  font-family:Arial;
-  background:#0f172a;
-  color:white;
-  padding:20px;
-}
-
-h1{text-align:center}
-
-.controls{
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-bottom:20px;
-}
-
-button{
-  padding:12px 16px;
-  border:none;
-  border-radius:10px;
-  background:#2563eb;
-  color:white;
-  cursor:pointer;
-}
-
-.active{background:#16a34a !important;}
-
-.layout{
-  display:flex;
-  justify-content:center;
-  gap:25px;
-  flex-wrap:wrap;
-  align-items:flex-start;
-}
-
-.card{
-  width:220px;
-  height:320px;
-  background:white;
-  color:black;
-  border-radius:18px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  padding:18px;
-}
-
-.red{color:#dc2626;}
-
-.tracker{
-  width:360px;
-  background:rgba(255,255,255,0.05);
-  padding:15px;
-  border-radius:12px;
-}
-
-.seen-grid{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:10px;
-}
-
-.value-stack{
-  min-height:130px;
-  background:rgba(255,255,255,0.06);
-  border-radius:10px;
-  padding:8px;
-  position:relative;
-}
-
-.value-label{
-  text-align:center;
-  margin-bottom:6px;
-  font-weight:bold;
-  color:#facc15;
-}
-
-.card-stack{
-  position:relative;
-  height:100px;
-}
-
-.mini-card{
-  width:48px;
-  height:66px;
-  background:white;
-  color:black;
-  border-radius:7px;
-  padding:5px;
-  position:absolute;
-  left:50%;
-  transform:translateX(-50%);
-  box-shadow:0 3px 7px rgba(0,0,0,0.35);
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  font-weight:bold;
-}
-
-.mini-card .top{
-  font-size:13px;
-}
-
-.mini-card .middle{
-  font-size:22px;
-  text-align:center;
-}
-
-.mini-card .bottom{
-  font-size:13px;
-  transform:rotate(180deg);
-}
-
-.hred{color:#dc2626;}
-
-.msg{
-  text-align:center;
-  margin-top:10px;
-  color:#facc15;
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>F*** The Dealer</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
+  <header class="nav">
+    <div class="nav-left">
+      <a class="brand" href="./index.html">Card Games</a>
+    </div>
+    <nav class="nav-right">
+      <a href="./index.html">All Games</a>
+    </nav>
+  </header>
 
-<h1>F*** The Dealer</h1>
+  <main class="page">
+    <section class="teaser">
+      <div class="teaser-inner">
+        <h1>F*** The Dealer</h1>
+        <p class="muted">Dealer mode draws cards privately. Player mode shows the board state and seen rank counts without revealing the current card.</p>
 
-<div class="controls">
-  <button id="dealerBtn" class="active">Dealer</button>
-  <button id="playerBtn">Player</button>
-  <button id="drawBtn">Draw</button>
-  <button id="resetBtn">Reset</button>
-</div>
+        <div class="btn-row" style="margin-top:18px; display:flex; flex-wrap:wrap; gap:12px; justify-content:center;">
+          <button id="dealerBtn" class="btn active">Dealer</button>
+          <button id="playerBtn" class="btn ghost">Player</button>
+          <button id="drawBtn" class="btn">Draw</button>
+          <button id="resetBtn" class="btn ghost">Shuffle & Reset</button>
+        </div>
+      </div>
+    </section>
 
-<div class="layout">
-  <div id="dealerCard" class="card">🂠</div>
+    <div class="status" id="status">Deck shuffled. Ready to draw.</div>
 
-  <div class="tracker">
-    <h3>Seen Cards</h3>
-    <div class="seen-grid" id="seenGrid"></div>
-    <div class="msg" id="msg"></div>
-  </div>
-</div>
+    <div class="layout">
+      <div class="panel">
+        <div id="dealerCard" class="game-card card-back">🂠</div>
+        <div class="panel-footer">
+          <span id="remaining">52 cards remaining</span>
+          <span id="viewMode">Dealer view</span>
+        </div>
+      </div>
 
-<script>
-const suits=[
-  {s:"♠",c:"black"},
-  {s:"♥",c:"red"},
-  {s:"♦",c:"red"},
-  {s:"♣",c:"black"}
-];
+      <div class="tracker">
+        <div class="tracker-header">
+          <h2>Seen Cards</h2>
+          <span id="seenCount">0 drawn</span>
+        </div>
+        <div class="seen-grid" id="seenGrid"></div>
+        <div class="msg" id="msg"></div>
+      </div>
+    </div>
+  </main>
 
-const values=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  <footer class="footer">
+    <span>© <span id="year"></span> Rayden Dodd</span>
+  </footer>
 
-let deck=[];
-let mode="dealer";
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
 
-let currentCard=null;
-let shownCard=null;
-let playerHistory=[];
+    const suits = [
+      { s: "♠", c: "black" },
+      { s: "♥", c: "red" },
+      { s: "♦", c: "red" },
+      { s: "♣", c: "black" }
+    ];
 
-function buildDeck(){
-  deck=[];
-  playerHistory=[];
+    const values = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 
-  for(let s of suits){
-    for(let v of values){
-      deck.push({value:v,suit:s.s,color:s.c});
+    let deck = [];
+    let currentCard = null;
+    let playerHistory = [];
+    let mode = "dealer";
+
+    function buildDeck() {
+      deck = [];
+      playerHistory = [];
+
+      for (const suit of suits) {
+        for (const value of values) {
+          deck.push({ value, suit: suit.s, color: suit.c });
+        }
+      }
+
+      shuffleDeck(deck);
+      currentCard = null;
+      updateStatus("Deck shuffled. Ready to draw.");
+      document.getElementById("msg").textContent = "";
+      renderAll();
     }
-  }
 
-  currentCard=null;
-  shownCard=null;
+    function shuffleDeck(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
 
-  document.getElementById("msg").textContent="";
+    function drawCard() {
+      if (deck.length === 0) {
+        updateStatus("No cards left. Reset to shuffle.");
+        return;
+      }
 
-  renderAll();
-}
+      if (currentCard) {
+        playerHistory.push(currentCard);
+      }
 
-function drawCard(){
-  if(deck.length===0) return;
+      currentCard = deck.pop();
+      updateStatus("Card drawn. Switch to player mode to reveal board state.");
+      renderAll();
+    }
 
-  if(currentCard){
-    shownCard=currentCard;
-    playerHistory.push(shownCard);
-  }
+    function updateStatus(text) {
+      document.getElementById("status").textContent = text;
+    }
 
-  let i=Math.floor(Math.random()*deck.length);
-  currentCard=deck.splice(i,1)[0];
+    function renderAll() {
+      renderDealerCard();
+      renderSeenCards();
+      document.getElementById("remaining").textContent = `${deck.length} cards remaining`;
+      document.getElementById("seenCount").textContent = `${playerHistory.length} drawn`;
+      document.getElementById("viewMode").textContent = mode === "dealer" ? "Dealer view" : "Player view";
+    }
 
-  renderAll();
+    function renderDealerCard() {
+      const el = document.getElementById("dealerCard");
+      const cardVisible = mode === "dealer";
+      el.style.display = cardVisible ? "flex" : "none";
 
-  if(deck.length===0){
-    document.getElementById("msg").textContent="Deck Empty";
-  }
-}
+      if (!cardVisible) {
+        return;
+      }
 
-function renderDealerCard(){
-  const el=document.getElementById("dealerCard");
+      if (!currentCard) {
+        el.className = "game-card card-back";
+        el.innerHTML = "🂠";
+        return;
+      }
 
-  if(mode==="player"){
-    el.style.display="none";
-    return;
-  }
-
-  el.style.display="flex";
-
-  if(!currentCard){
-    el.className="card";
-    el.innerHTML="🂠";
-    return;
-  }
-
-  let c=currentCard;
-
-  el.className="card "+(c.color==="red"?"red":"");
-
-  el.innerHTML=`
-    <div style="font-size:36px;font-weight:bold;">
-      ${c.value}${c.suit}
-    </div>
-
-    <div style="font-size:70px;text-align:center;">
-      ${c.suit}
-    </div>
-
-    <div style="font-size:36px;font-weight:bold;transform:rotate(180deg);">
-      ${c.value}${c.suit}
-    </div>
-  `;
-}
-
-function renderSeenCards(){
-  let grid=document.getElementById("seenGrid");
-  grid.innerHTML="";
-
-  values.forEach(v=>{
-    let box=document.createElement("div");
-    box.className="value-stack";
-
-    let label=document.createElement("div");
-    label.className="value-label";
-
-    let cards=playerHistory.filter(card=>card.value===v);
-    label.textContent=v+" - "+cards.length+"/4";
-
-    let stack=document.createElement("div");
-    stack.className="card-stack";
-
-    cards.forEach((card,index)=>{
-      let d=document.createElement("div");
-      d.className="mini-card "+(card.color==="red"?"hred":"");
-
-      d.style.top=(index*12)+"px";
-      d.style.zIndex=index;
-
-      d.innerHTML=`
-        <div class="top">${card.value}${card.suit}</div>
-        <div class="middle">${card.suit}</div>
-        <div class="bottom">${card.value}${card.suit}</div>
+      const card = currentCard;
+      el.className = `game-card ${card.color === "red" ? "red" : ""}`;
+      el.innerHTML = `
+        <div class="card-face-top">${card.value}${card.suit}</div>
+        <div class="card-face-center">${card.suit}</div>
+        <div class="card-face-bottom">${card.value}${card.suit}</div>
       `;
+    }
 
-      stack.appendChild(d);
-    });
+    function renderSeenCards() {
+      const grid = document.getElementById("seenGrid");
+      grid.innerHTML = "";
 
-    box.appendChild(label);
-    box.appendChild(stack);
-    grid.appendChild(box);
-  });
-}
+      values.forEach(value => {
+        const box = document.createElement("div");
+        box.className = "value-stack";
 
-function renderAll(){
-  renderDealerCard();
-  renderSeenCards();
-}
+        const label = document.createElement("div");
+        label.className = "value-label";
+        const cards = playerHistory.filter(card => card.value === value);
+        label.textContent = `${value} - ${cards.length}/4`;
 
-function setMode(m){
-  mode=m;
+        const stack = document.createElement("div");
+        stack.className = "card-stack";
 
-  document.getElementById("dealerBtn").classList.remove("active");
-  document.getElementById("playerBtn").classList.remove("active");
+        cards.forEach((card, index) => {
+          const mini = document.createElement("div");
+          mini.className = `mini-card ${card.color === "red" ? "hred" : ""}`;
+          mini.style.top = `${index * 12}px`;
+          mini.style.zIndex = index;
+          mini.innerHTML = `
+            <div class="top">${card.value}${card.suit}</div>
+            <div class="middle">${card.suit}</div>
+            <div class="bottom">${card.value}${card.suit}</div>
+          `;
+          stack.appendChild(mini);
+        });
 
-  document.getElementById(m==="dealer"?"dealerBtn":"playerBtn")
-    .classList.add("active");
+        box.appendChild(label);
+        box.appendChild(stack);
+        grid.appendChild(box);
+      });
+    }
 
-  renderDealerCard();
-}
+    function setMode(target) {
+      mode = target;
+      document.getElementById("dealerBtn").classList.toggle("active", target === "dealer");
+      document.getElementById("playerBtn").classList.toggle("active", target === "player");
+      renderAll();
+    }
 
-document.getElementById("drawBtn").onclick=drawCard;
-document.getElementById("resetBtn").onclick=buildDeck;
-document.getElementById("dealerBtn").onclick=()=>setMode("dealer");
-document.getElementById("playerBtn").onclick=()=>setMode("player");
+    document.getElementById("dealerBtn").onclick = () => setMode("dealer");
+    document.getElementById("playerBtn").onclick = () => setMode("player");
+    document.getElementById("drawBtn").onclick = drawCard;
+    document.getElementById("resetBtn").onclick = buildDeck;
 
-buildDeck();
-</script>
-
+    buildDeck();
+  </script>
 </body>
 </html>
