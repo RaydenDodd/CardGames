@@ -63,7 +63,7 @@
   function renderCourtImage(card, options = {}) {
     const rankName = COURT_NAMES[card.value] || "king";
     const suitName = SUIT_NAMES[card.suit] || "spades";
-    const assetBasePath = options.assetBasePath || "assets/courts";
+    const assetBasePath = options.assetBasePath || "assets/courts/white";
     const image = make("img", "playing-card__court-image");
     image.src = `${assetBasePath}/${rankName}_of_${suitName}.png`;
     image.alt = `${rankName} of ${suitName}`;
