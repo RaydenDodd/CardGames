@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>F*** The Dealer</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="card-renderer.css" />
 </head>
 <body>
   <header class="nav">
@@ -35,7 +36,7 @@
 
     <div class="layout">
       <div class="panel">
-        <div id="dealerCard" class="game-card card-back">🂠</div>
+        <div id="dealerCard" class="dealer-card-slot"></div>
         <div class="panel-footer">
           <span id="remaining">52 cards remaining</span>
           <span id="viewMode">Dealer view</span>
@@ -57,6 +58,7 @@
     <span>© <span id="year"></span> Rayden Dodd</span>
   </footer>
 
+  <script src="card-renderer.js"></script>
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
 
@@ -127,26 +129,14 @@
 
     function renderDealerCard() {
       const el = document.getElementById("dealerCard");
-      const cardVisible = mode === "dealer";
-      el.style.display = cardVisible ? "flex" : "none";
+      el.innerHTML = "";
 
-      if (!cardVisible) {
+      if (mode !== "dealer" || !currentCard) {
+        el.appendChild(CardRenderer.renderCard(null, { size: "large", back: true }));
         return;
       }
 
-      if (!currentCard) {
-        el.className = "game-card card-back";
-        el.innerHTML = "🂠";
-        return;
-      }
-
-      const card = currentCard;
-      el.className = `game-card ${card.color === "red" ? "red" : ""}`;
-      el.innerHTML = `
-        <div class="card-face-top">${card.value}${card.suit}</div>
-        <div class="card-face-center">${card.suit}</div>
-        <div class="card-face-bottom">${card.value}${card.suit}</div>
-      `;
+      el.appendChild(CardRenderer.renderCard(currentCard, { size: "large" }));
     }
 
     function renderSeenCards() {
@@ -166,15 +156,9 @@
         stack.className = "card-stack";
 
         cards.forEach((card, index) => {
-          const mini = document.createElement("div");
-          mini.className = `mini-card ${card.color === "red" ? "hred" : ""}`;
+          const mini = CardRenderer.renderCard(card, { size: "mini" });
           mini.style.top = `${index * 12}px`;
           mini.style.zIndex = index;
-          mini.innerHTML = `
-            <div class="top">${card.value}${card.suit}</div>
-            <div class="middle">${card.suit}</div>
-            <div class="bottom">${card.value}${card.suit}</div>
-          `;
           stack.appendChild(mini);
         });
 

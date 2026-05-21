@@ -1,0 +1,160 @@
+.playing-card {
+  --card-red:#c82925;
+  --card-black:#141414;
+  --card-blue:#17477d;
+  --card-gold:#f0cf47;
+  --card-face:#fffdf7;
+  --card-size:1;
+  width:calc(245px * var(--card-size));
+  aspect-ratio:5 / 7;
+  position:relative;
+  display:block;
+  overflow:hidden;
+  border-radius:calc(14px * var(--card-size));
+  border:calc(1px * var(--card-size)) solid rgba(0,0,0,.18);
+  color:var(--card-black);
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255,255,255,.85), transparent 30%),
+    radial-gradient(circle at 72% 82%, rgba(218,205,178,.20), transparent 38%),
+    linear-gradient(180deg, #fff 0%, var(--card-face) 48%, #f2eee5 100%);
+  box-shadow:
+    0 calc(18px * var(--card-size)) calc(35px * var(--card-size)) rgba(0,0,0,.32),
+    inset 0 0 0 calc(5px * var(--card-size)) rgba(255,255,255,.82),
+    inset 0 0 0 calc(7px * var(--card-size)) rgba(20,20,20,.08);
+  font-family:Georgia, "Times New Roman", serif;
+  line-height:1;
+}
+
+.playing-card--red { color:var(--card-red); }
+
+.playing-card--large {
+  --card-size:1.45;
+  width:min(100%, 356px);
+}
+
+.playing-card--mini {
+  --card-size:.28;
+  border-radius:7px;
+  box-shadow:
+    0 8px 18px rgba(0,0,0,.3),
+    inset 0 0 0 2px rgba(255,255,255,.78),
+    inset 0 0 0 3px rgba(20,20,20,.08);
+}
+
+.playing-card__corner {
+  position:absolute;
+  z-index:5;
+  left:calc(16px * var(--card-size));
+  top:calc(14px * var(--card-size));
+  display:grid;
+  justify-items:center;
+  gap:calc(2px * var(--card-size));
+  min-width:calc(30px * var(--card-size));
+  font-weight:900;
+  text-align:center;
+}
+
+.playing-card__corner--bottom {
+  inset:auto calc(16px * var(--card-size)) calc(14px * var(--card-size)) auto;
+  transform:rotate(180deg);
+}
+
+.playing-card__rank {
+  font-size:calc(28px * var(--card-size));
+  letter-spacing:0;
+}
+
+.playing-card__suit {
+  font-size:calc(26px * var(--card-size));
+}
+
+.playing-card__pips {
+  position:absolute;
+  inset:calc(52px * var(--card-size)) calc(46px * var(--card-size));
+}
+
+.playing-card__pip {
+  position:absolute;
+  transform:translate(-50%, -50%);
+  font-size:calc(39px * var(--card-size));
+  filter:drop-shadow(0 1px 0 rgba(255,255,255,.5));
+}
+
+.playing-card__pip--rotated {
+  transform:translate(-50%, -50%) rotate(180deg);
+}
+
+.playing-card--mini .playing-card__pips {
+  inset:calc(15px * var(--card-size)) calc(16px * var(--card-size));
+}
+
+.playing-card--asset-face {
+  display:grid;
+  place-items:center;
+  padding:calc(8px * var(--card-size));
+}
+
+.playing-card__court-image {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  user-select:none;
+  pointer-events:none;
+}
+
+.playing-card--mini.playing-card--asset-face {
+  padding:2px;
+}
+
+.playing-card--mini .playing-card__corner {
+  left:calc(8px * var(--card-size));
+  top:calc(7px * var(--card-size));
+}
+
+.playing-card--mini .playing-card__corner--bottom {
+  inset:auto calc(8px * var(--card-size)) calc(7px * var(--card-size)) auto;
+}
+
+.playing-card--mini .playing-card__rank {
+  font-size:calc(26px * var(--card-size));
+}
+
+.playing-card--mini .playing-card__suit {
+  font-size:calc(24px * var(--card-size));
+}
+
+.playing-card--back {
+  display:grid;
+  place-items:center;
+  background:
+    linear-gradient(45deg, rgba(255,255,255,.12) 25%, transparent 25% 50%, rgba(255,255,255,.12) 50% 75%, transparent 75%),
+    linear-gradient(135deg, #15345f, #11213d);
+  background-size:calc(18px * var(--card-size)) calc(18px * var(--card-size)), auto;
+  color:#f8fafc;
+}
+
+.playing-card--back::before {
+  content:"";
+  position:absolute;
+  inset:calc(18px * var(--card-size));
+  border:calc(3px * var(--card-size)) double rgba(255,255,255,.8);
+  border-radius:calc(10px * var(--card-size));
+}
+
+.playing-card--back::after {
+  content:"";
+  width:calc(80px * var(--card-size));
+  aspect-ratio:1;
+  border-radius:50%;
+  border:calc(4px * var(--card-size)) double rgba(255,255,255,.8);
+  background:rgba(255,255,255,.08);
+  box-shadow:0 0 0 calc(16px * var(--card-size)) rgba(255,255,255,.05);
+}
+
+@media (max-width: 680px) {
+  .playing-card--large {
+    --card-size:1;
+    width:min(100%, 250px);
+  }
+}
