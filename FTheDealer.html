@@ -130,8 +130,13 @@
     function renderDealerCard() {
       const el = document.getElementById("dealerCard");
       el.innerHTML = "";
+      el.style.display = mode === "dealer" ? "flex" : "none";
 
-      if (mode !== "dealer" || !currentCard) {
+      if (mode !== "dealer") {
+        return;
+      }
+
+      if (!currentCard) {
         el.appendChild(CardRenderer.renderCard(null, { size: "large", back: true }));
         return;
       }
