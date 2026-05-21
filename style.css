@@ -185,6 +185,63 @@ h1 { margin:0 0 10px; font-size:clamp(32px,4vw,48px); }
   font-size:14px;
 }
 
+.game-card {
+  width:100%;
+  max-width:360px;
+  aspect-ratio: 3 / 4;
+  min-height:420px;
+  padding:26px;
+  border-radius:28px;
+  border:1px solid rgba(0,0,0,.12);
+  box-shadow:0 24px 60px rgba(0,0,0,.25);
+  background:linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
+  color:#111;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  align-items:center;
+  text-align:center;
+}
+
+.game-card::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:28px;
+  pointer-events:none;
+  background:radial-gradient(circle at 50% 10%, rgba(255,255,255,.65), transparent 24%),
+              radial-gradient(circle at 50% 90%, rgba(255,255,255,.24), transparent 28%);
+}
+
+.game-card.red {
+  color:#c62828;
+}
+
+.card-face-top,
+.card-face-bottom {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  width:100%;
+  font-size:24px;
+  font-weight:800;
+}
+
+.card-face-bottom {
+  transform:rotate(180deg);
+}
+
+.card-face-center {
+  font-size:96px;
+  line-height:1;
+}
+
+.card-back {
+  background:linear-gradient(180deg, #0f172a 0%, #141c2b 100%);
+  color:#fff;
+}
+
 .status {
   margin-top:-8px;
   margin-bottom:24px;
@@ -194,21 +251,6 @@ h1 { margin:0 0 10px; font-size:clamp(32px,4vw,48px); }
   border:1px solid rgba(255,255,255,.08);
   color:var(--text);
   font-weight:600;
-}
-
-.game-card {
-  min-height:360px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  gap:14px;
-  padding:28px;
-  border-radius:32px;
-  background:rgba(255,255,255,.08);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow);
-  text-align:center;
 }
 
 .card-back {
@@ -299,7 +341,26 @@ h1 { margin:0 0 10px; font-size:clamp(32px,4vw,48px); }
   background:rgba(10,14,22,.35);
 }
 
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns:1fr;
+  }
+
+  .panel,
+  .tracker {
+    padding:18px;
+  }
+
+  .game-card {
+    max-width:100%;
+    min-height:auto;
+    aspect-ratio: 4 / 5;
+  }
+}
+
 @media (max-width: 680px) {
   .page { padding:22px 14px 40px; }
   .teaser-inner { padding:24px; }
+  .btn-row { justify-content:center; }
+  .seen-grid { grid-template-columns:repeat(2,minmax(60px,1fr)); }
 }
