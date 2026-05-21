@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>F*** The Dealer</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#0f172a;
+  color:white;
+  padding:20px;
+}
+
+h1{text-align:center}
+
+.controls{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:20px;
+}
+
+button{
+  padding:12px 16px;
+  border:none;
+  border-radius:10px;
+  background:#2563eb;
+  color:white;
+  cursor:pointer;
+}
+
+.active{background:#16a34a !important;}
+
+.layout{
+  display:flex;
+  justify-content:center;
+  gap:25px;
+  flex-wrap:wrap;
+  align-items:flex-start;
+}
+
+.card{
+  width:220px;
+  height:320px;
+  background:white;
+  color:black;
+  border-radius:18px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:18px;
+}
+
+.red{color:#dc2626;}
+
+.tracker{
+  width:360px;
+  background:rgba(255,255,255,0.05);
+  padding:15px;
+  border-radius:12px;
+}
+
+.seen-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+}
+
+.value-stack{
+  min-height:130px;
+  background:rgba(255,255,255,0.06);
+  border-radius:10px;
+  padding:8px;
+  position:relative;
+}
+
+.value-label{
+  text-align:center;
+  margin-bottom:6px;
+  font-weight:bold;
+  color:#facc15;
+}
+
+.card-stack{
+  position:relative;
+  height:100px;
+}
+
+.mini-card{
+  width:48px;
+  height:66px;
+  background:white;
+  color:black;
+  border-radius:7px;
+  padding:5px;
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  box-shadow:0 3px 7px rgba(0,0,0,0.35);
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  font-weight:bold;
+}
+
+.mini-card .top{
+  font-size:13px;
+}
+
+.mini-card .middle{
+  font-size:22px;
+  text-align:center;
+}
+
+.mini-card .bottom{
+  font-size:13px;
+  transform:rotate(180deg);
+}
+
+.hred{color:#dc2626;}
+
+.msg{
+  text-align:center;
+  margin-top:10px;
+  color:#facc15;
+}
+</style>
+</head>
+
+<body>
+
+<h1>F*** The Dealer</h1>
+
+<div class="controls">
+  <button id="dealerBtn" class="active">Dealer</button>
+  <button id="playerBtn">Player</button>
+  <button id="drawBtn">Draw</button>
+  <button id="resetBtn">Reset</button>
+</div>
+
+<div class="layout">
+  <div id="dealerCard" class="card">🂠</div>
+
+  <div class="tracker">
+    <h3>Seen Cards</h3>
+    <div class="seen-grid" id="seenGrid"></div>
+    <div class="msg" id="msg"></div>
+  </div>
+</div>
+
+<script>
+const suits=[
+  {s:"♠",c:"black"},
+  {s:"♥",c:"red"},
+  {s:"♦",c:"red"},
+  {s:"♣",c:"black"}
+];
+
+const values=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+let deck=[];
+let mode="dealer";
+
+let currentCard=null;
+let shownCard=null;
+let playerHistory=[];
+
+function buildDeck(){
+  deck=[];
+  playerHistory=[];
+
+  for(let s of suits){
+    for(let v of values){
+      deck.push({value:v,suit:s.s,color:s.c});
+    }
+  }
+
+  currentCard=null;
+  shownCard=null;
+
+  document.getElementById("msg").textContent="";
+
+  renderAll();
+}
+
+function drawCard(){
+  if(deck.length===0) return;
+
+  if(currentCard){
+    shownCard=currentCard;
+    playerHistory.push(shownCard);
+  }
+
+  let i=Math.floor(Math.random()*deck.length);
+  currentCard=deck.splice(i,1)[0];
+
+  renderAll();
+
+  if(deck.length===0){
+    document.getElementById("msg").textContent="Deck Empty";
+  }
+}
+
+function renderDealerCard(){
+  const el=document.getElementById("dealerCard");
+
+  if(mode==="player"){
+    el.style.display="none";
+    return;
+  }
+
+  el.style.display="flex";
+
+  if(!currentCard){
+    el.className="card";
+    el.innerHTML="🂠";
+    return;
+  }
+
+  let c=currentCard;
+
+  el.className="card "+(c.color==="red"?"red":"");
+
+  el.innerHTML=`
+    <div style="font-size:36px;font-weight:bold;">
+      ${c.value}${c.suit}
+    </div>
+
+    <div style="font-size:70px;text-align:center;">
+      ${c.suit}
+    </div>
+
+    <div style="font-size:36px;font-weight:bold;transform:rotate(180deg);">
+      ${c.value}${c.suit}
+    </div>
+  `;
+}
+
+function renderSeenCards(){
+  let grid=document.getElementById("seenGrid");
+  grid.innerHTML="";
+
+  values.forEach(v=>{
+    let box=document.createElement("div");
+    box.className="value-stack";
+
+    let label=document.createElement("div");
+    label.className="value-label";
+
+    let cards=playerHistory.filter(card=>card.value===v);
+    label.textContent=v+" - "+cards.length+"/4";
+
+    let stack=document.createElement("div");
+    stack.className="card-stack";
+
+    cards.forEach((card,index)=>{
+      let d=document.createElement("div");
+      d.className="mini-card "+(card.color==="red"?"hred":"");
+
+      d.style.top=(index*12)+"px";
+      d.style.zIndex=index;
+
+      d.innerHTML=`
+        <div class="top">${card.value}${card.suit}</div>
+        <div class="middle">${card.suit}</div>
+        <div class="bottom">${card.value}${card.suit}</div>
+      `;
+
+      stack.appendChild(d);
+    });
+
+    box.appendChild(label);
+    box.appendChild(stack);
+    grid.appendChild(box);
+  });
+}
+
+function renderAll(){
+  renderDealerCard();
+  renderSeenCards();
+}
+
+function setMode(m){
+  mode=m;
+
+  document.getElementById("dealerBtn").classList.remove("active");
+  document.getElementById("playerBtn").classList.remove("active");
+
+  document.getElementById(m==="dealer"?"dealerBtn":"playerBtn")
+    .classList.add("active");
+
+  renderDealerCard();
+}
+
+document.getElementById("drawBtn").onclick=drawCard;
+document.getElementById("resetBtn").onclick=buildDeck;
+document.getElementById("dealerBtn").onclick=()=>setMode("dealer");
+document.getElementById("playerBtn").onclick=()=>setMode("player");
+
+buildDeck();
+</script>
+
+</body>
+</html>
