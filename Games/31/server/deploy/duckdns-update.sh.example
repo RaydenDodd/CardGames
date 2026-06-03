@@ -1,0 +1,5 @@
+#!/bin/sh
+DOMAIN="cardgames"
+TOKEN="replace-with-your-duckdns-token"
+
+curl -fsS "https://www.duckdns.org/update?domains=${DOMAIN}&token=${TOKEN}&ip="

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>31 / Blitz</title>
+  <link rel="stylesheet" href="../../style.css" />
+  <link rel="stylesheet" href="../../card-renderer.css" />
+  <link rel="stylesheet" href="thirty-one.css" />
+</head>
+<body class="thirty-one-page">
+  <main class="game-stage" aria-label="31 / Blitz game table">
+    <section class="room-code-card">
+      <span class="label">Room Code</span>
+      <div class="room-code-row">
+        <strong id="roomCode">----</strong>
+        <button id="copyRoomBtn" class="icon-button" type="button" aria-label="Copy room code">Copy</button>
+      </div>
+    </section>
+
+    <section class="turn-card">
+      <span id="connectionStatus">Connecting...</span>
+      <strong id="currentPlayer">Waiting for host</strong>
+      <span>Next: <b id="nextPlayer">--</b> &middot; <b id="playerCount">0/10</b></span>
+    </section>
+
+    <section class="score-card">
+      <span class="label">Your Best</span>
+      <strong id="bestScore">0</strong>
+      <button id="helpBtn" class="trophy-button" type="button">?</button>
+    </section>
+
+    <section class="host-controls" id="hostControls" hidden aria-label="Host controls">
+      <button id="startBtn" class="glass-button" type="button">Start</button>
+      <button id="skipBtn" class="glass-button" type="button">Skip</button>
+      <button id="stopBtn" class="glass-button" type="button">Reset</button>
+    </section>
+
+    <div class="avatar-ring" id="avatarRing" aria-label="Players around the table"></div>
+
+    <section class="table-zone" aria-label="Card table">
+      <div class="felt-table">
+        <div class="table-pattern"></div>
+        <button id="stockPile" class="pile stock-pile" type="button" aria-label="Draw from new pile">
+          <span class="pile-label">New</span>
+          <span id="stockCard" class="pile-card"></span>
+          <span id="stockCount" class="pile-count">0</span>
+        </button>
+        <button id="discardPile" class="pile discard-pile" type="button" aria-label="Draw from dead pile">
+          <span class="pile-label">Dead Pile</span>
+          <span id="discardCard" class="pile-card"></span>
+          <span id="discardCount" class="pile-count">0</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="hand-area" aria-label="Your hand">
+      <button id="handPrevBtn" class="carousel-arrow carousel-arrow-left" type="button" aria-label="Scroll hand left">&lsaquo;</button>
+      <div id="handScroller" class="hand-scroller">
+        <div id="handTrack" class="hand-track"></div>
+      </div>
+      <button id="handNextBtn" class="carousel-arrow carousel-arrow-right" type="button" aria-label="Scroll hand right">&rsaquo;</button>
+    </section>
+
+    <section class="action-row" aria-label="Card actions">
+      <button id="sortBtn" class="utility-button" type="button">Sort</button>
+      <button id="hintBtn" class="utility-button" type="button">Hint</button>
+      <button id="discardBtn" class="main-action" type="button" disabled>Play a Card</button>
+      <span id="handStatus" class="hand-status">Your cards appear here.</span>
+      <span id="turnHint" class="turn-hint">Join a room to play.</span>
+    </section>
+  </main>
+
+  <section id="joinPanel" class="join-panel" aria-label="Join 31 room">
+    <form id="joinForm" class="join-card">
+      <h1>31 / Blitz</h1>
+      <p class="muted">Create a table or join with a room code. Your device remembers your seat if you refresh.</p>
+      <label>
+        Name
+        <input id="playerNameInput" autocomplete="nickname" maxlength="24" placeholder="Your name" />
+      </label>
+      <label>
+        Room Code
+        <input id="roomCodeInput" autocomplete="off" maxlength="4" placeholder="ABCD" />
+      </label>
+      <div class="join-actions">
+        <button id="createRoomBtn" class="glass-button primary" type="button">Create Room</button>
+        <button id="joinRoomBtn" class="glass-button" type="submit">Join Room</button>
+      </div>
+      <p id="joinError" class="form-error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="helpPanel" class="help-panel" hidden>
+    <div class="help-card">
+      <button id="closeHelpBtn" class="close-button" type="button" aria-label="Close help">&times;</button>
+      <h2>How to Play 31</h2>
+      <p>Each player starts with 3 cards. On your turn, draw from the new pile or dead pile, then discard back down to 3 cards.</p>
+      <p>Your score is the best total you can make in one suit. Aces are 11, face cards are 10, and number cards keep their value.</p>
+      <p>Tap a card to select it. Swipe the selected card upward toward the table or press Play a Card after drawing.</p>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="../../card-renderer.js"></script>
+  <script src="thirty-one.js"></script>
+</body>
+</html>

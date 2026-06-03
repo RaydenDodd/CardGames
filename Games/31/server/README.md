@@ -1,0 +1,62 @@
+# 31 / Blitz Realtime Server
+
+Node WebSocket server for `CardGames/Games/31/`.
+
+## Local Run
+
+```sh
+cd CardGames/Games/31/server
+npm install
+npm start
+```
+
+Health check:
+
+```sh
+curl http://localhost:8787/health
+```
+
+The browser client uses `ws://localhost:8787/ws` on localhost and `wss://cardgames.duckdns.org/ws` on GitHub Pages. To override it temporarily:
+
+```text
+Games/31/?server=ws://192.168.0.32:8787/ws
+```
+
+## Raspberry Pi Deployment
+
+1. Register the DuckDNS subdomain `cardgames.duckdns.org`.
+2. Forward router ports `80` and `443` to the Raspberry Pi.
+3. Install Node.js, npm, Caddy, and git on the Pi.
+4. Clone or pull this repo on the Pi.
+5. Install server dependencies:
+
+```sh
+cd /home/pi/Projects/CardGames/Games/31/server
+npm install --omit=dev
+```
+
+6. Copy `deploy/Caddyfile` to `/etc/caddy/Caddyfile`, then reload Caddy:
+
+```sh
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+7. Copy `deploy/thirty-one.service` to `/etc/systemd/system/thirty-one.service`, update paths/users if needed, then enable it:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now thirty-one
+sudo systemctl status thirty-one
+```
+
+8. Add a DuckDNS updater cron using `deploy/duckdns-update.sh.example`.
+
+## Public Endpoints
+
+- `GET https://cardgames.duckdns.org/health`
+- `WSS wss://cardgames.duckdns.org/ws`
+
+## State
+
+The server keeps one active room in memory and writes a small snapshot to `Games/31/server/data/state.json`. That file is intentionally ignored by git.

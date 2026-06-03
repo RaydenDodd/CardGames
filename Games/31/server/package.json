@@ -1,0 +1,14 @@
+{
+  "name": "cardgames-thirty-one-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realtime WebSocket server for the CardGames 31 / Blitz multiplayer game.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.0"
+  }
+}

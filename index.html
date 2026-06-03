@@ -30,13 +30,21 @@
   </main>
 
   <footer class="footer">
-    <span>© <span id="year"></span> Rayden Dodd</span>
+    <span>&copy; <span id="year"></span> Rayden Dodd</span>
   </footer>
 
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
 
     const games = [
+      {
+        id: "thirty-one",
+        title: "31 / Blitz",
+        desc: "Multiplayer draw-and-discard 31 with a shared felt table, room code joining, host controls, and mobile card handling.",
+        tags: ["JavaScript", "Multiplayer", "Card Game", "Mobile"],
+        play: "./Games/31/",
+        category: "Card Games"
+      },
       {
         id: "f-the-dealer",
         title: "F*** The Dealer",

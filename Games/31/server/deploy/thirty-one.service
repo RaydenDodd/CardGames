@@ -1,0 +1,16 @@
+[Unit]
+Description=CardGames 31 / Blitz WebSocket server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Projects/CardGames/Games/31/server
+Environment=PORT=8787
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
