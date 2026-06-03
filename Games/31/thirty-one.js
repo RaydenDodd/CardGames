@@ -31,7 +31,6 @@
     skipBtn: document.getElementById("skipBtn"),
     stopBtn: document.getElementById("stopBtn"),
     handStatus: document.getElementById("handStatus"),
-    discardBtn: document.getElementById("discardBtn"),
     sortBtn: document.getElementById("sortBtn"),
     hintBtn: document.getElementById("hintBtn"),
     handPrevBtn: document.getElementById("handPrevBtn"),
@@ -100,10 +99,6 @@
 
     dom.discardPile.addEventListener("click", () => {
       if (canDraw()) send("drawDiscard");
-    });
-
-    dom.discardBtn.addEventListener("click", () => {
-      discardSelected();
     });
 
     dom.startBtn.addEventListener("click", () => send("startGame"));
@@ -425,8 +420,6 @@
     dom.skipBtn.disabled = !isHost || !isPlaying;
     dom.stopBtn.disabled = !roomState;
 
-    dom.discardBtn.disabled = !(privateState.isTurn && privateState.mustDiscard && selectedCardId);
-    dom.discardBtn.textContent = "Play a Card";
     dom.bestScore.textContent = best.suit ? `${best.total} ${best.suit}` : "0";
     dom.bestScore.classList.toggle("red-score", RED_SUITS.has(best.suit));
     dom.turnHint.textContent = turnHint();

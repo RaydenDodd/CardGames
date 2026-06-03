@@ -219,8 +219,7 @@
 }
 
 .glass-button,
-.utility-button,
-.main-action {
+.utility-button {
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -247,7 +246,6 @@
 
 .glass-button:hover,
 .utility-button:hover,
-.main-action:hover,
 .icon-button:hover,
 .trophy-button:hover,
 .carousel-arrow:hover {
@@ -258,7 +256,6 @@
 
 .glass-button:disabled,
 .utility-button:disabled,
-.main-action:disabled,
 .pile:disabled {
   opacity:.45;
   cursor:not-allowed;
@@ -410,19 +407,19 @@
 
 .avatar-seat.opponent-top {
   left:50%;
-  top:8.5%;
+  top:19%;
   transform:translateX(-50%);
 }
 
 .avatar-seat.opponent-left {
-  left:7%;
-  top:38%;
+  left:9%;
+  top:48%;
   transform:translateY(-50%);
 }
 
 .avatar-seat.opponent-right {
-  right:7%;
-  top:38%;
+  right:9%;
+  top:48%;
   transform:translateY(-50%);
 }
 
@@ -436,6 +433,7 @@
 
 .voxel-avatar {
   position:relative;
+  order:3;
   width:96px;
   height:118px;
   filter:drop-shadow(0 18px 26px rgba(0,0,0,.45));
@@ -540,6 +538,7 @@
 }
 
 .avatar-name {
+  order:1;
   max-width:160px;
   padding:7px 15px;
   overflow:hidden;
@@ -552,6 +551,7 @@
 }
 
 .avatar-meta {
+  order:2;
   min-width:62px;
   padding:4px 12px;
   border:1px solid rgba(255,255,255,.12);
@@ -669,32 +669,18 @@
   right:auto;
   bottom:max(12px, env(safe-area-inset-bottom));
   z-index:35;
-  width:min(900px, 92vw);
+  width:min(760px, 92vw);
   transform:translateX(-50%);
   display:grid;
-  grid-template-columns:122px 122px minmax(220px, 300px) 1fr;
+  grid-template-columns:122px 122px minmax(160px, 1fr) minmax(180px, 1fr);
   gap:12px;
   align-items:center;
 }
 
-.utility-button,
-.main-action {
+.utility-button {
   min-height:52px;
   border-radius:999px;
   font-weight:900;
-}
-
-.main-action {
-  color:#dff6b7;
-  border-color:rgba(196,241,134,.46);
-  background:
-    radial-gradient(circle at 50% 0, rgba(196,241,134,.22), transparent 60%),
-    rgba(91,124,60,.24);
-  box-shadow:
-    0 0 22px rgba(165,217,99,.26),
-    0 14px 38px rgba(0,0,0,.34),
-    inset 0 1px 0 rgba(255,255,255,.12);
-  font-size:18px;
 }
 
 .hand-status,
@@ -860,10 +846,12 @@
 
   .avatar-seat.opponent-left {
     left:1%;
+    top:50%;
   }
 
   .avatar-seat.opponent-right {
     right:1%;
+    top:50%;
   }
 
   .voxel-avatar {
@@ -997,17 +985,17 @@
   }
 
   .avatar-seat.opponent-top {
-    top:15%;
+    top:22%;
   }
 
   .avatar-seat.opponent-left {
     left:-5px;
-    top:37%;
+    top:47%;
   }
 
   .avatar-seat.opponent-right {
     right:-5px;
-    top:37%;
+    top:47%;
   }
 
   .voxel-avatar {
@@ -1064,14 +1052,9 @@
     gap:7px;
   }
 
-  .utility-button,
-  .main-action {
+  .utility-button {
     min-height:44px;
     font-size:13px;
-  }
-
-  .main-action {
-    font-size:15px;
   }
 
   .hand-status {
