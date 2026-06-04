@@ -266,9 +266,9 @@
   left:50%;
   top:50%;
   z-index:5;
-  width:min(1180px, 92vw);
-  height:min(590px, 60vh);
-  transform:translate(-50%, -45%);
+  width:min(1180px, 74vw);
+  height:min(520px, 52vh);
+  transform:translate(-50%, -38%);
   perspective:1050px;
   display:grid;
   place-items:center;
@@ -391,37 +391,32 @@
 .avatar-ring {
   position:absolute;
   inset:0;
-  z-index:14;
+  z-index:1;
   pointer-events:none;
 }
 
 .avatar-seat {
   position:absolute;
   width:190px;
+  z-index:1;
   display:grid;
   justify-items:center;
   gap:7px;
   color:rgba(248,250,252,.94);
   text-shadow:0 2px 12px rgba(0,0,0,.85);
+  will-change:transform;
 }
 
-.avatar-seat.opponent-top {
-  left:50%;
-  top:19%;
-  transform:translateX(-50%);
-}
-
-.avatar-seat.opponent-left {
-  left:9%;
-  top:48%;
-  transform:translateY(-50%);
-}
-
-.avatar-seat.opponent-right {
-  right:9%;
-  top:48%;
-  transform:translateY(-50%);
-}
+.avatar-seat.opponent-0 { left:50%; top:23%; transform:translateX(-50%); }
+.avatar-seat.opponent-1 { left:3%; top:45%; transform:translateY(-50%); }
+.avatar-seat.opponent-2 { right:3%; top:45%; transform:translateY(-50%); }
+.avatar-seat.opponent-3 { left:23%; top:33%; transform:translate(-50%, -50%) scale(.86); }
+.avatar-seat.opponent-4 { right:23%; top:33%; transform:translate(50%, -50%) scale(.86); }
+.avatar-seat.opponent-5 { left:14%; top:59%; transform:translate(-50%, -50%) scale(.80); }
+.avatar-seat.opponent-6 { right:14%; top:59%; transform:translate(50%, -50%) scale(.80); }
+.avatar-seat.opponent-7 { left:36%; top:29%; transform:translate(-50%, -50%) scale(.74); }
+.avatar-seat.opponent-8 { right:36%; top:29%; transform:translate(50%, -50%) scale(.74); }
+.avatar-seat.opponent-9 { left:50%; top:72%; transform:translate(-50%, -50%) scale(.70); }
 
 .avatar-seat.placeholder {
   opacity:.45;
@@ -665,37 +660,45 @@
 
 .action-row {
   position:absolute;
-  left:50%;
-  right:auto;
+  left:0;
+  right:0;
   bottom:max(12px, env(safe-area-inset-bottom));
   z-index:35;
-  width:min(760px, 92vw);
-  transform:translateX(-50%);
-  display:grid;
-  grid-template-columns:122px 122px minmax(160px, 1fr) minmax(180px, 1fr);
-  gap:12px;
-  align-items:center;
+  height:64px;
+  pointer-events:none;
 }
 
 .utility-button {
+  position:absolute;
+  bottom:0;
+  min-width:128px;
   min-height:52px;
   border-radius:999px;
   font-weight:900;
+  pointer-events:auto;
 }
 
-.hand-status,
 .turn-hint {
+  position:absolute;
+  left:50%;
+  bottom:17px;
+  transform:translateX(-50%);
+  width:min(360px, 44vw);
   overflow:hidden;
   color:rgba(226,232,240,.72);
   font-size:13px;
   font-weight:800;
   text-overflow:ellipsis;
   white-space:nowrap;
+  text-align:center;
 }
 
-.turn-hint {
-  justify-self:end;
-  max-width:280px;
+#sortBtn {
+  left:max(32px, env(safe-area-inset-left));
+}
+
+#hintBtn {
+  right:max(32px, env(safe-area-inset-right));
 }
 
 .join-panel,
@@ -810,7 +813,7 @@
   }
 
   .turn-card {
-    top:92px;
+    top:max(18px, env(safe-area-inset-top));
     min-width:220px;
     padding:10px 14px;
   }
@@ -836,23 +839,44 @@
 
   .table-zone {
     top:48%;
-    width:96vw;
-    height:56vh;
+    width:76vw;
+    height:52vh;
   }
 
   .avatar-seat {
     width:150px;
   }
 
-  .avatar-seat.opponent-left {
-    left:1%;
-    top:50%;
+  .avatar-seat.opponent-0,
+  .avatar-seat.opponent-top {
+    left:50%;
+    top:23%;
+    transform:translateX(-50%);
   }
 
-  .avatar-seat.opponent-right {
-    right:1%;
-    top:50%;
+  .avatar-seat.opponent-1,
+  .avatar-seat.opponent-left {
+    left:1%;
+    top:45%;
+    right:auto;
+    transform:translateY(-50%);
   }
+
+  .avatar-seat.opponent-2,
+  .avatar-seat.opponent-right {
+    left:auto;
+    right:1%;
+    top:45%;
+    transform:translateY(-50%);
+  }
+
+  .avatar-seat.opponent-3 { left:24%; top:34%; transform:translate(-50%, -50%) scale(.78); }
+  .avatar-seat.opponent-4 { right:24%; top:34%; transform:translate(50%, -50%) scale(.78); }
+  .avatar-seat.opponent-5 { left:13%; top:60%; transform:translate(-50%, -50%) scale(.72); }
+  .avatar-seat.opponent-6 { right:13%; top:60%; transform:translate(50%, -50%) scale(.72); }
+  .avatar-seat.opponent-7 { left:36%; top:31%; transform:translate(-50%, -50%) scale(.68); }
+  .avatar-seat.opponent-8 { right:36%; top:31%; transform:translate(50%, -50%) scale(.68); }
+  .avatar-seat.opponent-9 { left:50%; top:70%; transform:translate(-50%, -50%) scale(.62); }
 
   .voxel-avatar {
     width:78px;
@@ -905,8 +929,9 @@
   }
 
   .turn-card {
-    top:max(78px, calc(env(safe-area-inset-top) + 72px));
-    min-width:190px;
+    top:max(10px, env(safe-area-inset-top));
+    min-width:168px;
+    max-width:42vw;
   }
 
   .turn-card strong {
@@ -951,7 +976,7 @@
   .table-zone {
     top:46%;
     height:46vh;
-    width:112vw;
+    width:88vw;
   }
 
   .felt-table {
@@ -984,18 +1009,37 @@
     gap:3px;
   }
 
+  .avatar-seat.opponent-0,
   .avatar-seat.opponent-top {
-    top:22%;
+    left:50%;
+    top:23%;
+    transform:translateX(-50%);
   }
 
+  .avatar-seat.opponent-1,
   .avatar-seat.opponent-left {
     left:-5px;
-    top:47%;
+    top:45%;
+    right:auto;
+    transform:translateY(-50%);
   }
 
+  .avatar-seat.opponent-2,
   .avatar-seat.opponent-right {
+    left:auto;
     right:-5px;
-    top:47%;
+    top:45%;
+    transform:translateY(-50%);
+  }
+
+  .avatar-seat.opponent-3 { left:22%; top:33%; transform:translate(-50%, -50%) scale(.56); }
+  .avatar-seat.opponent-4 { right:22%; top:33%; transform:translate(50%, -50%) scale(.56); }
+  .avatar-seat.opponent-5,
+  .avatar-seat.opponent-6,
+  .avatar-seat.opponent-7,
+  .avatar-seat.opponent-8,
+  .avatar-seat.opponent-9 {
+    display:none;
   }
 
   .voxel-avatar {
@@ -1057,7 +1101,4 @@
     font-size:13px;
   }
 
-  .hand-status {
-    display:none;
-  }
 }

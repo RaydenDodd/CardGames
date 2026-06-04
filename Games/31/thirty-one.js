@@ -30,7 +30,6 @@
     startBtn: document.getElementById("startBtn"),
     skipBtn: document.getElementById("skipBtn"),
     stopBtn: document.getElementById("stopBtn"),
-    handStatus: document.getElementById("handStatus"),
     sortBtn: document.getElementById("sortBtn"),
     hintBtn: document.getElementById("hintBtn"),
     handPrevBtn: document.getElementById("handPrevBtn"),
@@ -296,13 +295,18 @@
         .filter(player => player.id !== playerId)
         .sort((a, b) => a.seat - b.seat)
       : [];
-    const slots = ["top", "left", "right"];
 
-    slots.forEach((slot, index) => {
-      const player = opponents[index] || null;
+    const selfIsSeated = Boolean(getSelf());
+    const maxOpponentSeats = selfIsSeated ? MAX_PLAYERS - 1 : MAX_PLAYERS;
+    const visibleSeatCount = Math.max(3, Math.min(maxOpponentSeats, opponents.length + 1));
+    const anchorClasses = ["opponent-top", "opponent-left", "opponent-right"];
+
+    for (let seatIndex = 0; seatIndex < visibleSeatCount; seatIndex++) {
+      const player = opponents[seatIndex] || null;
       const seat = document.createElement("div");
-      seat.className = `avatar-seat opponent-${slot}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
-      seat.style.setProperty("--avatar-hue", String((((player && player.seat) || index + 1) * 47) % 360));
+      const anchorClass = anchorClasses[seatIndex] || "";
+      seat.className = `avatar-seat opponent-${seatIndex} ${anchorClass}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
+      seat.style.setProperty("--avatar-hue", String((((player && player.seat) || seatIndex + 1) * 47) % 360));
 
       const avatar = document.createElement("div");
       avatar.className = "voxel-avatar";
@@ -328,7 +332,7 @@
 
       seat.append(avatar, name, meta);
       dom.avatarRing.appendChild(seat);
-    });
+    }
   }
 
   function renderHand() {
@@ -401,9 +405,6 @@
       dom.handTrack.appendChild(cardButton);
     });
 
-    dom.handStatus.textContent = hand.length
-      ? `${hand.length} card${hand.length === 1 ? "" : "s"} in hand`
-      : "Your cards appear here.";
     dom.handPrevBtn.disabled = hand.length < 4;
     dom.handNextBtn.disabled = hand.length < 4;
   }

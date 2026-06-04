@@ -31,7 +31,7 @@ Games/31/?server=ws://192.168.0.32:8787/ws
 5. Install server dependencies:
 
 ```sh
-cd /home/pi/Projects/CardGames/Games/31/server
+cd /home/rayden/CardGames/Games/31/server
 npm install --omit=dev
 ```
 
