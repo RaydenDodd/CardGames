@@ -8,7 +8,6 @@
   const MAX_PLAYERS = 10;
   const RED_SUITS = new Set(["\u2665", "\u2666"]);
   const CARD_RENDER_OPTIONS = { assetBasePath: "../../assets/courts/white" };
-  const MINI_CARD_RENDER_OPTIONS = { size: "mini", assetBasePath: "../../assets/courts/white" };
 
   const dom = {
     roomCode: document.getElementById("roomCode"),
@@ -63,6 +62,7 @@
   let selectedCardId = "";
   let toastTimer = null;
   let autoJoinTimer = null;
+  let handSpreadFrame = 0;
   let pointerState = null;
   let suppressClickCardId = "";
 
@@ -142,6 +142,8 @@
         dom.helpPanel.hidden = true;
       }
     });
+
+    window.addEventListener("resize", scheduleHandSpread);
   }
 
   function connect() {
@@ -281,11 +283,16 @@
 
     dom.stockCount.textContent = String(stockCount);
     dom.discardCount.textContent = String(discardCount);
-    replaceCard(dom.stockCard, stockCount > 0 ? CardRenderer.renderCard(null, { size: "mini", back: true }) : emptyPile("Empty"));
-    replaceCard(dom.discardCard, discardTop ? CardRenderer.renderCard(discardTop, MINI_CARD_RENDER_OPTIONS) : emptyPile("Empty"));
+    dom.stockPile.style.setProperty("--pile-depth", `${Math.min(22, Math.max(0, stockCount) * 0.42)}px`);
+    dom.discardPile.style.setProperty("--pile-depth", `${Math.min(12, Math.max(0, discardCount) * 0.36)}px`);
+    replaceCard(dom.stockCard, stockCount > 0 ? CardRenderer.renderCard(null, { back: true }) : emptyPile("Empty"));
+    replaceCard(dom.discardCard, discardTop ? CardRenderer.renderCard(discardTop, CARD_RENDER_OPTIONS) : emptyPile("Empty"));
 
-    dom.stockPile.disabled = !canDraw() || stockCount < 1;
-    dom.discardPile.disabled = !canDraw() || !discardTop;
+    const canDrawNow = canDraw();
+    dom.stockPile.disabled = !canDrawNow || stockCount < 1;
+    dom.discardPile.disabled = !canDrawNow || !discardTop;
+    dom.stockPile.classList.toggle("pile--ready", canDrawNow && stockCount > 0);
+    dom.discardPile.classList.toggle("pile--ready", canDrawNow && Boolean(discardTop));
   }
 
   function renderAvatars() {
@@ -337,14 +344,15 @@
 
   function renderHand() {
     const hand = privateState.hand || [];
-    const overlap = hand.length <= 2 ? 8 : Math.min(82, 24 + hand.length * 11);
-    dom.handTrack.style.setProperty("--hand-overlap", `${overlap}px`);
     dom.handTrack.innerHTML = "";
+    dom.handTrack.classList.remove("hand-track--overflowing");
 
     hand.forEach((card, index) => {
       const cardButton = document.createElement("button");
       cardButton.type = "button";
-      cardButton.className = `hand-card${card.id === selectedCardId ? " selected" : ""}`;
+      const isSelected = card.id === selectedCardId;
+      const canDiscardSelected = isSelected && privateState.mustDiscard && privateState.isTurn;
+      cardButton.className = `hand-card${isSelected ? " selected" : ""}${canDiscardSelected ? " can-discard" : ""}`;
       cardButton.style.zIndex = card.id === selectedCardId ? "50" : String(index + 1);
       cardButton.setAttribute("aria-label", `${card.value} ${card.suit}`);
       cardButton.appendChild(CardRenderer.renderCard(card, CARD_RENDER_OPTIONS));
@@ -364,6 +372,7 @@
           element: cardButton,
           startX: event.clientX,
           startY: event.clientY,
+          pointerId: event.pointerId,
           moved: false
         };
         cardButton.setPointerCapture(event.pointerId);
@@ -376,9 +385,10 @@
         const deltaY = event.clientY - pointerState.startY;
         const deltaX = event.clientX - pointerState.startX;
         if (deltaY < -8 && Math.abs(deltaY) > Math.abs(deltaX) * 1.1) {
+          event.preventDefault();
           pointerState.moved = true;
           cardButton.classList.add("dragging", "selected");
-          cardButton.style.transform = `translateY(${Math.max(deltaY - 28, -150)}px) scale(1.08) rotate(0deg)`;
+          cardButton.style.transform = `translate3d(${Math.max(Math.min(deltaX * 0.25, 34), -34)}px, ${Math.max(deltaY - 28, -190)}px, 0) scale(1.08) rotate(0deg)`;
         }
       });
 
@@ -407,6 +417,7 @@
 
     dom.handPrevBtn.disabled = hand.length < 4;
     dom.handNextBtn.disabled = hand.length < 4;
+    scheduleHandSpread();
   }
 
   function renderControls() {
@@ -417,6 +428,8 @@
     const best = privateState.best || { total: 0, suit: "" };
 
     dom.hostControls.hidden = !isHost;
+    dom.startBtn.hidden = isPlaying;
+    dom.skipBtn.hidden = !isPlaying;
     dom.startBtn.disabled = !roomState || isPlaying || connectedCount < 2;
     dom.skipBtn.disabled = !isHost || !isPlaying;
     dom.stopBtn.disabled = !roomState;
@@ -488,6 +501,33 @@
     dom.handScroller.scrollBy({ left: distance * direction, behavior: "smooth" });
   }
 
+  function scheduleHandSpread() {
+    cancelAnimationFrame(handSpreadFrame);
+    handSpreadFrame = requestAnimationFrame(updateHandSpread);
+  }
+
+  function updateHandSpread() {
+    const cards = Array.from(dom.handTrack.querySelectorAll(".hand-card"));
+    if (cards.length <= 1) {
+      dom.handTrack.style.setProperty("--hand-overlap", "0px");
+      dom.handTrack.classList.remove("hand-track--overflowing");
+      return;
+    }
+
+    const firstCard = cards[0].querySelector(".playing-card");
+    const cardWidth = firstCard ? firstCard.getBoundingClientRect().width : 150;
+    const available = Math.max(cardWidth, dom.handScroller.clientWidth - 24);
+    const minStep = Math.min(cardWidth - 2, Math.max(48, cardWidth * 0.38));
+    const maxStep = cardWidth * (cards.length <= 3 ? 0.82 : 0.74);
+    const fitStep = (available - cardWidth) / (cards.length - 1);
+    const step = Math.max(minStep, Math.min(maxStep, fitStep));
+    const overlap = Math.max(0, Math.round(cardWidth - step));
+    const spreadWidth = cardWidth + (cards.length - 1) * (cardWidth - overlap);
+
+    dom.handTrack.style.setProperty("--hand-overlap", `${overlap}px`);
+    dom.handTrack.classList.toggle("hand-track--overflowing", spreadWidth > available + 2);
+  }
+
   function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text)
@@ -523,6 +563,15 @@
   }
 
   function cleanupPointerCard(cardButton) {
+    if (pointerState && typeof cardButton.releasePointerCapture === "function") {
+      try {
+        if (cardButton.hasPointerCapture(pointerState.pointerId)) {
+          cardButton.releasePointerCapture(pointerState.pointerId);
+        }
+      } catch {
+        // Pointer capture may already be released by the browser.
+      }
+    }
     cardButton.classList.remove("dragging");
     cardButton.style.transform = "";
   }
