@@ -56,9 +56,12 @@ wss.on("connection", ws => {
 
   ws.on("close", () => {
     if (ws.playerId) {
-      sockets.delete(ws.playerId);
-      markDisconnected(ws.playerId);
-      broadcast();
+      const playerId = ws.playerId;
+      removeSocket(ws);
+      if (!hasOpenSocket(playerId)) {
+        markDisconnected(playerId);
+        broadcast();
+      }
     }
   });
 
@@ -315,7 +318,7 @@ function discardCard(player, data) {
 function leaveSeat(player) {
   player.connected = false;
   player.lastSeen = Date.now();
-  sockets.delete(player.id);
+  closePlayerSockets(player.id);
   saveSnapshot();
   broadcast();
 }
@@ -335,14 +338,53 @@ function markDisconnected(playerId) {
 
 function bindSocket(ws, playerId) {
   if (ws.playerId && ws.playerId !== playerId) {
-    sockets.delete(ws.playerId);
-  }
-  const existing = sockets.get(playerId);
-  if (existing && existing !== ws && existing.readyState === WebSocket.OPEN) {
-    existing.close(1000, "Rejoined from another connection.");
+    removeSocket(ws);
   }
   ws.playerId = playerId;
-  sockets.set(playerId, ws);
+  if (!sockets.has(playerId)) {
+    sockets.set(playerId, new Set());
+  }
+  sockets.get(playerId).add(ws);
+}
+
+function removeSocket(ws) {
+  if (!ws.playerId) {
+    return;
+  }
+  const playerSockets = sockets.get(ws.playerId);
+  if (!playerSockets) {
+    return;
+  }
+  playerSockets.delete(ws);
+  if (!playerSockets.size) {
+    sockets.delete(ws.playerId);
+  }
+}
+
+function hasOpenSocket(playerId) {
+  const playerSockets = sockets.get(playerId);
+  if (!playerSockets) {
+    return false;
+  }
+  for (const ws of playerSockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function closePlayerSockets(playerId) {
+  const playerSockets = sockets.get(playerId);
+  if (!playerSockets) {
+    return;
+  }
+  for (const ws of playerSockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close(1000, "Seat left.");
+    }
+  }
+  sockets.delete(playerId);
 }
 
 function requirePlayer(ws) {

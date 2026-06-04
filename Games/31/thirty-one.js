@@ -62,6 +62,8 @@
   let selectedCardId = "";
   let toastTimer = null;
   let autoJoinTimer = null;
+  let autoJoinPending = false;
+  let joinAttemptPending = false;
   let handSpreadFrame = 0;
   let pointerState = null;
   let suppressClickCardId = "";
@@ -79,6 +81,7 @@
       const name = readName();
       if (!name) return;
       setStored(STORAGE.playerName, name);
+      joinAttemptPending = true;
       send("createRoom", { playerId, name });
     });
 
@@ -89,6 +92,7 @@
       if (!name || !roomCode) return;
       setStored(STORAGE.playerName, name);
       setStored(STORAGE.roomCode, roomCode);
+      joinAttemptPending = true;
       send("joinRoom", { playerId, name, roomCode });
     });
 
@@ -196,11 +200,15 @@
     const savedName = getStored(STORAGE.playerName);
     const savedRoomCode = getStored(STORAGE.roomCode);
     if (!savedName || !savedRoomCode) {
+      autoJoinPending = false;
       return;
     }
 
+    autoJoinPending = true;
+    dom.joinPanel.hidden = true;
     autoJoinTimer = setTimeout(() => {
       if (!isSelfSeated()) {
+        joinAttemptPending = true;
         send("joinRoom", { playerId, name: savedName, roomCode: savedRoomCode });
       }
     }, 350);
@@ -219,12 +227,14 @@
           isTurn: false
         };
         selectedCardId = "";
-        dom.joinPanel.hidden = false;
+        dom.joinPanel.hidden = autoJoinPending;
       } else if (roomState.players.some(player => player.id === playerId)) {
+        autoJoinPending = false;
+        joinAttemptPending = false;
         dom.joinPanel.hidden = true;
         setStored(STORAGE.roomCode, roomState.code);
       } else {
-        dom.joinPanel.hidden = false;
+        dom.joinPanel.hidden = autoJoinPending;
       }
       render();
       return;
@@ -251,6 +261,11 @@
     }
 
     if (message.type === "error") {
+      if (joinAttemptPending) {
+        autoJoinPending = false;
+        joinAttemptPending = false;
+        dom.joinPanel.hidden = false;
+      }
       showError(data.message || "Action failed.");
     }
   }
