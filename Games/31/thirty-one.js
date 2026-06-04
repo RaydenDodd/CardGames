@@ -234,7 +234,7 @@
         dom.joinPanel.hidden = true;
         setStored(STORAGE.roomCode, roomState.code);
       } else {
-        dom.joinPanel.hidden = autoJoinPending;
+        dom.joinPanel.hidden = false;
       }
       render();
       return;
@@ -318,16 +318,40 @@
         .sort((a, b) => a.seat - b.seat)
       : [];
 
-    const selfIsSeated = Boolean(getSelf());
-    const maxOpponentSeats = selfIsSeated ? MAX_PLAYERS - 1 : MAX_PLAYERS;
-    const visibleSeatCount = Math.max(3, Math.min(maxOpponentSeats, opponents.length + 1));
-    const anchorClasses = ["opponent-top", "opponent-left", "opponent-right"];
+    const slots = ["top", "left", "right"];
 
-    for (let seatIndex = 0; seatIndex < visibleSeatCount; seatIndex++) {
+    for (let seatIndex = 0; seatIndex < Math.max(3, opponents.length); seatIndex++) {
       const player = opponents[seatIndex] || null;
       const seat = document.createElement("div");
-      const anchorClass = anchorClasses[seatIndex] || "";
-      seat.className = `avatar-seat opponent-${seatIndex} ${anchorClass}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
+      const slotClass = slots[seatIndex % slots.length] || "top";
+      seat.className = `avatar-seat opponent-${slotClass}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
+      seat.style.setProperty("--avatar-hue", String((((player && player.seat) || seatIndex + 1) * 47) % 360));
+
+      const avatar = document.createElement("div");
+      avatar.className = "voxel-avatar";
+      avatar.innerHTML = `
+        <span class="voxel-head"></span>
+        <span class="voxel-body"></span>
+        <span class="voxel-arm left"></span>
+        <span class="voxel-arm right"></span>
+        <span class="opponent-cards">
+          <span class="voxel-card"></span>
+          <span class="voxel-card"></span>
+          <span class="voxel-card"></span>
+        </span>
+      `;
+
+      const name = document.createElement("div");
+      name.className = "avatar-name";
+      name.textContent = player ? player.name : "Open Seat";
+
+      const meta = document.createElement("div");
+      meta.className = "avatar-meta";
+      meta.textContent = player ? `${player.handCount || 0} cards${player.isHost ? " | Host" : ""}` : "waiting";
+
+      seat.append(avatar, name, meta);
+      dom.avatarRing.appendChild(seat);
+    }
       seat.style.setProperty("--avatar-hue", String((((player && player.seat) || seatIndex + 1) * 47) % 360));
 
       const avatar = document.createElement("div");
