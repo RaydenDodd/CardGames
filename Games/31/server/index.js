@@ -247,7 +247,9 @@ function startGame(player) {
   room.finalTurnPlayerIds = [];
   room.finishReason = "";
   room.finishedAt = null;
-  room.currentTurnPlayerId = activePlayers[0].id;
+  // Randomize turn order
+  const randomizedPlayers = shuffle(activePlayers.slice());
+  room.currentTurnPlayerId = randomizedPlayers[0].id;
   saveSnapshot();
   broadcast("Game started.");
 }
@@ -633,7 +635,14 @@ function finalResults() {
         difference: 0
       };
     })
-    .sort((a, b) => b.total - a.total || a.seat - b.seat);
+    .sort((a, b) => {
+      // First sort by total score (descending)
+      if (b.total !== a.total) {
+        return b.total - a.total;
+      }
+      // If scores are equal, apply tie-breaker
+      return compareHandTieBreaker(a, b);
+    });
 
   const leaderTotal = rows.length ? rows[0].total : 0;
   return rows.map((row, index) => ({
@@ -642,6 +651,37 @@ function finalResults() {
     isWinner: row.total === leaderTotal,
     difference: row.total - leaderTotal
   }));
+}
+
+function compareHandTieBreaker(playerA, playerB) {
+  // Get the cards in the winning suit for each player
+  const cardsA = playerA.hand.filter(card => card.suit === playerA.suit);
+  const cardsB = playerB.hand.filter(card => card.suit === playerB.suit);
+
+  // Sort cards by value descending
+  const sortedA = cardsA.slice().sort((a, b) => cardValue(b.value) - cardValue(a.value));
+  const sortedB = cardsB.slice().sort((a, b) => cardValue(b.value) - cardValue(a.value));
+
+  // Compare card by card
+  const minLength = Math.min(sortedA.length, sortedB.length);
+  for (let i = 0; i < minLength; i++) {
+    const valA = cardValue(sortedA[i].value);
+    const valB = cardValue(sortedB[i].value);
+    if (valA !== valB) {
+      return valB - valA; // Higher value wins
+    }
+  }
+
+  // If all compared cards are identical, use suit ordering
+  const suitOrder = { "\u2660": 0, "\u2665": 1, "\u2666": 2, "\u2663": 3 }; // Spades < Hearts < Diamonds < Clubs
+  const suitIndexA = suitOrder[playerA.suit] ?? 4;
+  const suitIndexB = suitOrder[playerB.suit] ?? 4;
+  if (suitIndexA !== suitIndexB) {
+    return suitIndexA - suitIndexB; // Lower suit index wins
+  }
+
+  // If everything is identical, use seat order
+  return playerA.seat - playerB.seat;
 }
 
 function privateHand(player) {

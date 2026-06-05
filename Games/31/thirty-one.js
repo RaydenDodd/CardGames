@@ -55,6 +55,7 @@
     resultsTitle: document.getElementById("resultsTitle"),
     resultsReason: document.getElementById("resultsReason"),
     resultsList: document.getElementById("resultsList"),
+    resultsActions: document.getElementById("resultsActions"),
     playAgainBtn: document.getElementById("playAgainBtn"),
     endSessionResultsBtn: document.getElementById("endSessionResultsBtn"),
     toast: document.getElementById("toast")
@@ -810,8 +811,7 @@
       dom.resultsList.appendChild(item);
     });
 
-    dom.playAgainBtn.hidden = !isHost;
-    dom.endSessionResultsBtn.hidden = !isHost;
+    dom.resultsActions.style.display = isHost ? "flex" : "none";
     dom.resultsPanel.hidden = false;
   }
 
