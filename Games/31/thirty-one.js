@@ -501,21 +501,13 @@
 
   function renderAvatars() {
     dom.avatarRing.innerHTML = "";
-    const opponents = roomState
-      ? roomState.players
-        .filter(player => player.id !== playerId)
-        .sort((a, b) => a.seat - b.seat)
-      : [];
+    const seats = avatarSeatPlan();
 
-    const anchors = ["top", "left", "right"];
-    const visibleSeats = Math.max(3, Math.min(MAX_PLAYERS - 1, opponents.length));
-
-    for (let seatIndex = 0; seatIndex < visibleSeats; seatIndex++) {
-      const player = opponents[seatIndex] || null;
+    for (const { player, seatIndex, anchor } of seats) {
       const seat = document.createElement("div");
-      const anchorClass = anchors[seatIndex] ? ` opponent-${anchors[seatIndex]}` : "";
-      seat.className = `avatar-seat opponent-${seatIndex}${anchorClass}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
-      seat.style.setProperty("--avatar-hue", String((((player && player.seat) || seatIndex + 1) * 47) % 360));
+      const anchorClass = anchor ? ` opponent-${anchor}` : "";
+      seat.className = `avatar-seat opponent-${seatIndex}${anchorClass}${!player.connected ? " inactive" : ""}${player.id === roomState.currentTurnPlayerId ? " current-turn" : ""}`;
+      seat.style.setProperty("--avatar-hue", String(((player.seat + 1) * 47) % 360));
 
       const avatar = document.createElement("div");
       avatar.className = "voxel-avatar";
@@ -533,15 +525,91 @@
 
       const name = document.createElement("div");
       name.className = "avatar-name";
-      name.textContent = player ? player.name : "Open Seat";
+      name.textContent = player.name;
 
       const meta = document.createElement("div");
       meta.className = "avatar-meta";
-      meta.textContent = player ? `${player.handCount || 0} cards${player.isHost ? " | Host" : ""}` : "waiting";
+      meta.textContent = `${player.handCount || 0} cards${player.isHost ? " | Host" : ""}`;
 
       seat.append(avatar, name, meta);
       dom.avatarRing.appendChild(seat);
     }
+  }
+
+  function avatarSeatPlan() {
+    if (!roomState) {
+      return [];
+    }
+
+    const players = activePlayersInTurnOrder();
+    const opponents = players.filter(player => player.id !== playerId);
+    if (!opponents.length) {
+      return [];
+    }
+
+    if (opponents.length === 1) {
+      return [{ player: opponents[0], seatIndex: 0, anchor: "top" }];
+    }
+
+    const left = nextTurnPlayer(players, playerId, candidate => candidate.id !== playerId);
+    const right = previousTurnPlayer(players, playerId, candidate => (
+      candidate.id !== playerId &&
+      candidate.id !== (left && left.id)
+    ));
+    const used = new Set([playerId, left && left.id, right && right.id].filter(Boolean));
+    const current = players.find(player => player.id === roomState.currentTurnPlayerId) || null;
+
+    let center = null;
+    if (current && current.id !== playerId && !used.has(current.id)) {
+      center = current;
+    }
+    if (!center) {
+      const centerReferenceId = left ? left.id : playerId;
+      center = nextTurnPlayer(players, centerReferenceId, candidate => !used.has(candidate.id));
+    }
+    if (!center) {
+      center = opponents.find(player => !used.has(player.id)) || null;
+    }
+
+    return [
+      { player: center, seatIndex: 0, anchor: "top" },
+      { player: left, seatIndex: 1, anchor: "left" },
+      { player: right, seatIndex: 2, anchor: "right" }
+    ].filter(seat => seat.player);
+  }
+
+  function activePlayersInTurnOrder() {
+    if (!roomState) {
+      return [];
+    }
+    return roomState.players
+      .filter(player => player.connected || player.handCount > 0)
+      .sort((a, b) => a.seat - b.seat);
+  }
+
+  function nextTurnPlayer(players, startPlayerId, predicate) {
+    return adjacentTurnPlayer(players, startPlayerId, 1, predicate);
+  }
+
+  function previousTurnPlayer(players, startPlayerId, predicate) {
+    return adjacentTurnPlayer(players, startPlayerId, -1, predicate);
+  }
+
+  function adjacentTurnPlayer(players, startPlayerId, direction, predicate) {
+    if (!players.length) {
+      return null;
+    }
+
+    const startIndex = players.findIndex(player => player.id === startPlayerId);
+    let index = startIndex >= 0 ? startIndex : direction > 0 ? -1 : 0;
+    for (let checked = 0; checked < players.length; checked++) {
+      index = (index + direction + players.length) % players.length;
+      const candidate = players[index];
+      if (!predicate || predicate(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   function renderHand() {
