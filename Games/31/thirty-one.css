@@ -554,7 +554,7 @@
   width:58px;
   height:58px;
   border-radius:8px;
-  background:linear-gradient(145deg, hsl(var(--avatar-hue, 210) 48% 20%), hsl(var(--avatar-hue, 210) 40% 10%));
+  background:linear-gradient(145deg, hsl(var(--avatar-hue, 210) 62% 25%), hsl(var(--avatar-hue, 210) 52% 12%));
 }
 
 .voxel-arm {
@@ -562,7 +562,7 @@
   width:18px;
   height:46px;
   border-radius:5px;
-  background:linear-gradient(145deg, hsl(var(--avatar-hue, 210) 46% 18%), #05080d);
+  background:linear-gradient(145deg, hsl(var(--avatar-hue, 210) 58% 22%), #05080d);
 }
 
 .voxel-arm.left {
@@ -2774,4 +2774,31 @@
   .result-hand {
     grid-column:2 / -1;
   }
+}
+
+.avatar-seat.current-turn {
+  z-index:14;
+}
+
+.avatar-seat.current-turn .voxel-avatar {
+  filter:
+    drop-shadow(0 18px 26px rgba(0,0,0,.45))
+    drop-shadow(0 0 12px hsla(var(--avatar-hue, 210), 86%, 68%, .64))
+    drop-shadow(0 0 28px rgba(255,244,190,.30));
+}
+
+.avatar-seat.current-turn .voxel-head,
+.avatar-seat.current-turn .voxel-body {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.24),
+    0 0 0 2px hsla(var(--avatar-hue, 210), 88%, 70%, .62),
+    0 10px 22px rgba(0,0,0,.30);
+}
+
+.avatar-seat.current-turn .avatar-name {
+  border:1px solid hsla(var(--avatar-hue, 210), 86%, 72%, .46);
+  background:linear-gradient(180deg, rgba(255,255,255,.14), hsla(var(--avatar-hue, 210), 75%, 26%, .34));
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.09),
+    0 0 18px hsla(var(--avatar-hue, 210), 90%, 68%, .34);
 }

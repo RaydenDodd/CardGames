@@ -22,11 +22,14 @@ const sockets = new Map();
 const app = express();
 app.use(express.json());
 app.get("/health", (_req, res) => {
+  const counts = roomCounts();
   res.json({
     ok: true,
     game: "thirty-one",
     roomCode: room ? room.code : null,
-    players: room ? room.players.filter(player => player.connected).length : 0
+    players: counts.activeCount,
+    connectedPlayers: counts.connectedCount,
+    seatedPlayers: counts.seatedCount
   });
 });
 app.get("/", (_req, res) => {
@@ -564,6 +567,7 @@ function publicRoom() {
   }
 
   const ordered = room.players.slice().sort((a, b) => a.seat - b.seat);
+  const counts = roomCounts(ordered);
   const current = room.status === "playing"
     ? room.players.find(p => p.id === room.currentTurnPlayerId) || null
     : null;
@@ -580,6 +584,9 @@ function publicRoom() {
       finalTurnPlayerIds: room.finalTurnPlayerIds || [],
       finishReason: room.finishReason || "",
       finishedAt: room.finishedAt || null,
+      connectedCount: counts.connectedCount,
+      activeCount: counts.activeCount,
+      seatedCount: counts.seatedCount,
       stockCount: room.stock.length,
       discardTop: topCard(room.discard),
       discardCount: room.discard.length,
@@ -595,6 +602,15 @@ function publicRoom() {
         handCount: p.hand.length
       }))
     }
+  };
+}
+
+function roomCounts(players = room ? room.players : []) {
+  const counted = Array.isArray(players) ? players : [];
+  return {
+    connectedCount: counted.filter(p => p.connected).length,
+    activeCount: counted.filter(p => p.connected || p.hand.length || (room && p.id === room.hostId)).length,
+    seatedCount: counted.length
   };
 }
 

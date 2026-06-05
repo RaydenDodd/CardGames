@@ -460,10 +460,8 @@
   }
 
   function renderHud() {
-    const players = roomState ? roomState.players : [];
-    const connectedCount = players.filter(player => player.connected).length;
     dom.roomCode.textContent = roomState ? roomState.code : "----";
-    dom.playerCount.textContent = `${connectedCount}/${MAX_PLAYERS}`;
+    dom.playerCount.textContent = `${displayPlayerCount()}/${MAX_PLAYERS}`;
     if (roomState && roomState.status === "finished") {
       dom.currentPlayer.textContent = "Game over";
     } else if (roomState && roomState.currentPlayerName) {
@@ -507,7 +505,7 @@
       const seat = document.createElement("div");
       const anchorClass = anchor ? ` opponent-${anchor}` : "";
       seat.className = `avatar-seat opponent-${seatIndex}${anchorClass}${!player.connected ? " inactive" : ""}${player.id === roomState.currentTurnPlayerId ? " current-turn" : ""}`;
-      seat.style.setProperty("--avatar-hue", String(((player.seat + 1) * 47) % 360));
+      seat.style.setProperty("--avatar-hue", String(((player.seat * 71) + 205) % 360));
 
       const avatar = document.createElement("div");
       avatar.className = "voxel-avatar";
@@ -677,14 +675,14 @@
     const isHost = Boolean(roomState && self && roomState.hostId === playerId);
     const isPlaying = Boolean(roomState && roomState.status === "playing");
     const isFinished = Boolean(roomState && roomState.status === "finished");
-    const connectedCount = roomState ? roomState.players.filter(player => player.connected).length : 0;
+    const readyCount = readyPlayerCount();
     const best = privateState.best || { total: 0, suit: "" };
 
     dom.hostControls.hidden = !isHost;
     dom.startBtn.textContent = isFinished ? "Play Again" : "Start";
     dom.startBtn.hidden = isPlaying;
     dom.skipBtn.hidden = !isPlaying;
-    dom.startBtn.disabled = !roomState || isPlaying || connectedCount < 2;
+    dom.startBtn.disabled = !roomState || isPlaying || readyCount < 2;
     dom.skipBtn.disabled = !isHost || !isPlaying;
     dom.stopBtn.disabled = !roomState;
     dom.endSessionBtn.disabled = !roomState;
@@ -903,6 +901,48 @@
       !privateState.mustDiscard &&
       privateState.hand.length === 3
     );
+  }
+
+  function displayPlayerCount() {
+    if (!roomState) {
+      return 0;
+    }
+    if (Number.isFinite(roomState.activeCount)) {
+      return Math.max(roomState.activeCount, localDisplayPlayerCount());
+    }
+
+    return localDisplayPlayerCount();
+  }
+
+  function localDisplayPlayerCount() {
+    if (!roomState) {
+      return 0;
+    }
+
+    const counted = new Set();
+    for (const player of roomState.players) {
+      if (player.connected || player.handCount > 0 || player.id === roomState.hostId || player.id === playerId) {
+        counted.add(player.id);
+      }
+    }
+    return counted.size;
+  }
+
+  function readyPlayerCount() {
+    if (!roomState) {
+      return 0;
+    }
+    if (Number.isFinite(roomState.connectedCount)) {
+      return Math.max(roomState.connectedCount, localReadyPlayerCount());
+    }
+    return localReadyPlayerCount();
+  }
+
+  function localReadyPlayerCount() {
+    if (!roomState) {
+      return 0;
+    }
+    return roomState.players.filter(player => player.connected || player.id === playerId).length;
   }
 
   function getSelf() {
