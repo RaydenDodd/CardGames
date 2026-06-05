@@ -2,24 +2,25 @@
 
 Node WebSocket server for `CardGames/Games/31/`.
 
-## Local Run
+## Raspberry Pi Run
 
 ```sh
-cd CardGames/Games/31/server
-npm install
+cd /home/rayden/CardGames/Games/31/server
+npm install --omit=dev
 npm start
 ```
 
 Health check:
 
 ```sh
-curl http://localhost:8787/health
+curl http://192.168.0.32:8787/health
 ```
 
-The browser client uses `ws://localhost:8787/ws` on localhost and `wss://cardgames.duckdns.org/ws` on GitHub Pages. To override it temporarily:
+The browser client connects to the Raspberry Pi server by LAN IP when opened from a laptop during local network use, and by DuckDNS when opened from GitHub Pages.
 
 ```text
 Games/31/?server=ws://192.168.0.32:8787/ws
+Games/31/?server=wss://cardgames.duckdns.org/ws
 ```
 
 ## Raspberry Pi Deployment

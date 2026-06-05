@@ -80,7 +80,7 @@ setInterval(() => {
 }, HEARTBEAT_MS);
 
 server.listen(PORT, () => {
-  console.log(`Thirty One server listening on http://localhost:${PORT}`);
+  console.log(`Thirty One server listening on port ${PORT}`);
 });
 
 function handleMessage(ws, message) {
@@ -95,7 +95,9 @@ function handleMessage(ws, message) {
     const player = requirePlayer(ws);
     if (type === "startGame") return startGame(player);
     if (type === "stopGame") return stopGame(player);
+    if (type === "endSession") return endSession(player);
     if (type === "skipPlayer") return skipPlayer(player);
+    if (type === "check") return checkRound(player);
     if (type === "drawStock") return drawStock(player);
     if (type === "drawDiscard") return drawDiscard(player);
     if (type === "discard") return discardCard(player, data);
@@ -121,6 +123,10 @@ function createRoom(ws, data) {
     hostId: playerId,
     currentTurnPlayerId: null,
     pendingDiscardPlayerId: null,
+    checkingPlayerId: null,
+    finalTurnPlayerIds: [],
+    finishReason: "",
+    finishedAt: null,
     stock: [],
     discard: [],
     players: [{
@@ -158,6 +164,10 @@ function joinRoom(ws, data) {
     player = room.players.find(p => !p.connected && p.name.toLowerCase() === name.toLowerCase());
   }
 
+  if (room.status === "playing" && (!player || player.hand.length === 0)) {
+    throw new Error("This game already started. Wait for the host to reset before joining.");
+  }
+
   if (!player) {
     if (room.players.some(p => p.connected && p.name.toLowerCase() === name.toLowerCase())) {
       throw new Error("That name is already seated. Use your same device to rejoin or choose another name.");
@@ -174,16 +184,10 @@ function joinRoom(ws, data) {
       lastSeen: Date.now(),
       hand: []
     };
-    if (room.status === "playing") {
-      dealIntoHand(player, 3);
-    }
     room.players.push(player);
   }
 
   player.name = name;
-  if (room.status === "playing" && player.hand.length === 0) {
-    dealIntoHand(player, 3);
-  }
   player.connected = true;
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
@@ -204,7 +208,9 @@ function syncPlayer(ws, data) {
   }
 
   if (room.status === "playing" && player.hand.length === 0) {
-    dealIntoHand(player, 3);
+    send(ws, "roomState", publicRoom());
+    send(ws, "error", { message: "This game already started. Wait for the host to reset before joining." });
+    return;
   }
   player.connected = true;
   player.lastSeen = Date.now();
@@ -234,6 +240,10 @@ function startGame(player) {
   room.discard = [room.stock.pop()];
   room.status = "playing";
   room.pendingDiscardPlayerId = null;
+  room.checkingPlayerId = null;
+  room.finalTurnPlayerIds = [];
+  room.finishReason = "";
+  room.finishedAt = null;
   room.currentTurnPlayerId = activePlayers[0].id;
   saveSnapshot();
   broadcast("Game started.");
@@ -247,10 +257,32 @@ function stopGame(player) {
   room.status = "lobby";
   room.currentTurnPlayerId = null;
   room.pendingDiscardPlayerId = null;
+  room.checkingPlayerId = null;
+  room.finalTurnPlayerIds = [];
+  room.finishReason = "";
+  room.finishedAt = null;
   room.stock = [];
   room.discard = [];
   saveSnapshot();
   broadcast("Game reset.");
+}
+
+function endSession(player) {
+  requireHost(player);
+  const message = "The host ended the room.";
+  room = null;
+  sockets.clear();
+  deleteSnapshot();
+
+  for (const ws of wss.clients) {
+    if (ws.readyState !== WebSocket.OPEN) {
+      continue;
+    }
+    ws.playerId = null;
+    send(ws, "sessionEnded", { message });
+    send(ws, "roomState", publicRoom());
+    send(ws, "toast", { message });
+  }
 }
 
 function skipPlayer(player) {
@@ -262,17 +294,48 @@ function skipPlayer(player) {
     room.discard.push(skipped.hand.pop());
   }
   room.pendingDiscardPlayerId = null;
-  advanceTurn();
+  if (!room.stock.length) {
+    finishGame("deck", "The deck ran out.");
+    return;
+  }
+  if (completeTurn(skipped)) {
+    return;
+  }
   saveSnapshot();
   broadcast(skipped ? `${skipped.name} was skipped.` : "Player skipped.");
+}
+
+function checkRound(player) {
+  requireTurn(player);
+  requireNoPendingDiscard(player);
+  if (room.checkingPlayerId) {
+    throw new Error("Someone has already checked.");
+  }
+  if (player.hand.length !== 3) {
+    throw new Error("You can only check with 3 cards.");
+  }
+
+  const finalPlayers = playersAfter(player.id).filter(p => p.id !== player.id);
+  room.checkingPlayerId = player.id;
+  room.finalTurnPlayerIds = finalPlayers.map(p => p.id);
+  room.pendingDiscardPlayerId = null;
+
+  if (!room.finalTurnPlayerIds.length) {
+    finishGame("check", `${player.name} checked.`);
+    return;
+  }
+
+  room.currentTurnPlayerId = room.finalTurnPlayerIds[0];
+  saveSnapshot();
+  broadcast(`${player.name} checked. Everyone else gets one more turn.`);
 }
 
 function drawStock(player) {
   requireTurn(player);
   requireNoPendingDiscard(player);
-  refillStockIfNeeded();
   if (!room.stock.length) {
-    throw new Error("No stock cards are available.");
+    finishGame("deck", "The deck ran out.");
+    return;
   }
   player.hand.push(room.stock.pop());
   room.pendingDiscardPlayerId = player.id;
@@ -310,7 +373,13 @@ function discardCard(player, data) {
   const [card] = player.hand.splice(index, 1);
   room.discard.push(card);
   room.pendingDiscardPlayerId = null;
-  advanceTurn();
+  if (!room.stock.length) {
+    finishGame("deck", "The deck ran out.");
+    return;
+  }
+  if (completeTurn(player)) {
+    return;
+  }
   saveSnapshot();
   broadcast(`${player.name} discarded.`);
 }
@@ -440,6 +509,20 @@ function advanceTurn() {
   room.currentTurnPlayerId = players[nextIndex].id;
 }
 
+function completeTurn(player) {
+  if (player && Array.isArray(room.finalTurnPlayerIds) && room.finalTurnPlayerIds.length) {
+    room.finalTurnPlayerIds = room.finalTurnPlayerIds.filter(id => id !== player.id);
+    if (!room.finalTurnPlayerIds.length) {
+      finishGame("check", "Final turns are complete.");
+      return true;
+    }
+    room.currentTurnPlayerId = room.finalTurnPlayerIds[0];
+    return false;
+  }
+  advanceTurn();
+  return false;
+}
+
 function activePlayersInSeatOrder() {
   return room.players
     .filter(p => p.connected || p.hand.length)
@@ -452,13 +535,27 @@ function connectedPlayersInSeatOrder() {
     .sort((a, b) => a.seat - b.seat);
 }
 
-function refillStockIfNeeded() {
-  if (room.stock.length || room.discard.length <= 1) {
-    return;
+function playersAfter(playerId) {
+  const players = activePlayersInSeatOrder();
+  if (!players.length) {
+    return [];
   }
-  const top = room.discard.pop();
-  room.stock = shuffle(room.discard);
-  room.discard = [top];
+  const index = players.findIndex(p => p.id === playerId);
+  if (index < 0) {
+    return players;
+  }
+  return players.slice(index + 1).concat(players.slice(0, index));
+}
+
+function finishGame(reason, toastMessage) {
+  room.status = "finished";
+  room.currentTurnPlayerId = null;
+  room.pendingDiscardPlayerId = null;
+  room.finalTurnPlayerIds = [];
+  room.finishReason = reason;
+  room.finishedAt = Date.now();
+  saveSnapshot();
+  broadcast(toastMessage || "Game over.");
 }
 
 function publicRoom() {
@@ -467,8 +564,10 @@ function publicRoom() {
   }
 
   const ordered = room.players.slice().sort((a, b) => a.seat - b.seat);
-  const current = room.players.find(p => p.id === room.currentTurnPlayerId) || null;
-  const next = nextPlayerAfter(room.currentTurnPlayerId);
+  const current = room.status === "playing"
+    ? room.players.find(p => p.id === room.currentTurnPlayerId) || null
+    : null;
+  const next = room.status === "playing" ? nextPlayerAfter(room.currentTurnPlayerId) : null;
 
   return {
     room: {
@@ -477,11 +576,16 @@ function publicRoom() {
       hostId: room.hostId,
       currentTurnPlayerId: room.currentTurnPlayerId,
       pendingDiscardPlayerId: room.pendingDiscardPlayerId,
+      checkingPlayerId: room.checkingPlayerId || null,
+      finalTurnPlayerIds: room.finalTurnPlayerIds || [],
+      finishReason: room.finishReason || "",
+      finishedAt: room.finishedAt || null,
       stockCount: room.stock.length,
       discardTop: topCard(room.discard),
       discardCount: room.discard.length,
       currentPlayerName: current ? current.name : "",
       nextPlayerName: next ? next.name : "",
+      results: room.status === "finished" ? finalResults() : [],
       players: ordered.map(p => ({
         id: p.id,
         name: p.name,
@@ -494,14 +598,34 @@ function publicRoom() {
   };
 }
 
-function dealIntoHand(player, count) {
-  for (let i = 0; i < count; i++) {
-    refillStockIfNeeded();
-    if (!room.stock.length) {
-      throw new Error("Not enough cards are available for another player.");
-    }
-    player.hand.push(room.stock.pop());
-  }
+function finalResults() {
+  const rows = room.players
+    .filter(p => p.hand.length)
+    .sort((a, b) => a.seat - b.seat)
+    .map(p => {
+      const best = bestScore(p.hand);
+      return {
+        id: p.id,
+        name: p.name,
+        seat: p.seat,
+        connected: p.connected,
+        isHost: p.id === room.hostId,
+        hand: p.hand,
+        best,
+        total: best.total,
+        suit: best.suit,
+        difference: 0
+      };
+    })
+    .sort((a, b) => b.total - a.total || a.seat - b.seat);
+
+  const leaderTotal = rows.length ? rows[0].total : 0;
+  return rows.map((row, index) => ({
+    ...row,
+    rank: index + 1,
+    isWinner: row.total === leaderTotal,
+    difference: row.total - leaderTotal
+  }));
 }
 
 function privateHand(player) {
@@ -658,5 +782,15 @@ function saveSnapshot() {
     fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
   } catch (error) {
     console.error("Failed to save snapshot:", error);
+  }
+}
+
+function deleteSnapshot() {
+  try {
+    if (fs.existsSync(SNAPSHOT_PATH)) {
+      fs.unlinkSync(SNAPSHOT_PATH);
+    }
+  } catch (error) {
+    console.error("Failed to delete snapshot:", error);
   }
 }

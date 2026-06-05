@@ -34,6 +34,7 @@
       <button id="startBtn" class="glass-button" type="button">Start</button>
       <button id="skipBtn" class="glass-button" type="button">Skip</button>
       <button id="stopBtn" class="glass-button" type="button">Reset</button>
+      <button id="endSessionBtn" class="glass-button danger" type="button">End Room</button>
     </section>
 
     <section class="table-scene" aria-label="Players and card table">
@@ -66,7 +67,7 @@
 
     <section class="action-row" aria-label="Card actions">
       <button id="sortBtn" class="utility-button" type="button">Sort</button>
-      <button id="hintBtn" class="utility-button" type="button">Hint</button>
+      <button id="checkBtn" class="utility-button" type="button">Check</button>
       <span id="turnHint" class="turn-hint">Join a room to play.</span>
     </section>
   </main>
@@ -95,9 +96,25 @@
     <div class="help-card">
       <button id="closeHelpBtn" class="close-button" type="button" aria-label="Close help">&times;</button>
       <h2>How to Play 31</h2>
-      <p>Each player starts with 3 cards. On your turn, draw from the new pile or dead pile, then discard back down to 3 cards.</p>
-      <p>Your score is the best total you can make in one suit. Aces are 11, face cards are 10, and number cards keep their value.</p>
-      <p>Tap a card to select it. After drawing, swipe the selected card upward toward the table to discard it.</p>
+      <p>Each player starts with 3 cards. Your goal is to make the highest total in one suit, up to 31.</p>
+      <p>On your turn, draw one card from the New pile or the Dead Pile, then discard one card so your hand returns to 3 cards.</p>
+      <p>Scoring only counts one suit. Aces are 11, face cards are 10, and number cards keep their value. Your Best shows your strongest suit total.</p>
+      <p>Before drawing, you may Check if you have 3 cards. Checking ends your turn and gives every other player one final turn.</p>
+      <p>The game ends after all final turns are complete, or immediately when the New pile runs out. The final scoreboard reveals every hand, score, and difference from first place.</p>
+      <p>The host can reset the round, play again after scores, or end the room for everyone.</p>
+    </div>
+  </section>
+
+  <section id="resultsPanel" class="results-panel" hidden aria-label="Final scores">
+    <div class="results-card">
+      <button id="closeResultsBtn" class="close-button" type="button" aria-label="Close results">&times;</button>
+      <h2 id="resultsTitle">Game Over</h2>
+      <p id="resultsReason" class="muted"></p>
+      <div id="resultsList" class="results-list"></div>
+      <div class="results-actions">
+        <button id="playAgainBtn" class="glass-button primary" type="button">Play Again</button>
+        <button id="endSessionResultsBtn" class="glass-button danger" type="button">End Room</button>
+      </div>
     </div>
   </section>
 

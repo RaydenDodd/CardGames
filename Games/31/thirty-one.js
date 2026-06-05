@@ -10,6 +10,7 @@
   const CARD_RENDER_OPTIONS = { assetBasePath: "../../assets/courts/white" };
 
   const dom = {
+    stage: document.querySelector(".game-stage"),
     roomCode: document.getElementById("roomCode"),
     copyRoomBtn: document.getElementById("copyRoomBtn"),
     connectionStatus: document.getElementById("connectionStatus"),
@@ -17,6 +18,7 @@
     nextPlayer: document.getElementById("nextPlayer"),
     playerCount: document.getElementById("playerCount"),
     avatarRing: document.getElementById("avatarRing"),
+    feltTable: document.querySelector(".felt-table"),
     stockPile: document.getElementById("stockPile"),
     stockCard: document.getElementById("stockCard"),
     stockCount: document.getElementById("stockCount"),
@@ -29,10 +31,12 @@
     startBtn: document.getElementById("startBtn"),
     skipBtn: document.getElementById("skipBtn"),
     stopBtn: document.getElementById("stopBtn"),
+    endSessionBtn: document.getElementById("endSessionBtn"),
     sortBtn: document.getElementById("sortBtn"),
-    hintBtn: document.getElementById("hintBtn"),
+    checkBtn: document.getElementById("checkBtn"),
     handPrevBtn: document.getElementById("handPrevBtn"),
     handNextBtn: document.getElementById("handNextBtn"),
+    handArea: document.querySelector(".hand-area"),
     handScroller: document.getElementById("handScroller"),
     handTrack: document.getElementById("handTrack"),
     joinPanel: document.getElementById("joinPanel"),
@@ -45,10 +49,18 @@
     helpBtn: document.getElementById("helpBtn"),
     helpPanel: document.getElementById("helpPanel"),
     closeHelpBtn: document.getElementById("closeHelpBtn"),
+    resultsPanel: document.getElementById("resultsPanel"),
+    closeResultsBtn: document.getElementById("closeResultsBtn"),
+    resultsTitle: document.getElementById("resultsTitle"),
+    resultsReason: document.getElementById("resultsReason"),
+    resultsList: document.getElementById("resultsList"),
+    playAgainBtn: document.getElementById("playAgainBtn"),
+    endSessionResultsBtn: document.getElementById("endSessionResultsBtn"),
     toast: document.getElementById("toast")
   };
 
   let socket = null;
+  let socketGeneration = 0;
   let reconnectTimer = null;
   let reconnectAttempts = 0;
   let roomState = null;
@@ -62,9 +74,16 @@
   let selectedCardId = "";
   let toastTimer = null;
   let autoJoinTimer = null;
+  let autoJoinFallbackTimer = null;
   let autoJoinPending = false;
+  let autoJoinBlocked = false;
   let joinAttemptPending = false;
+  let joinedThisSession = false;
+  let joinPanelRevealTimer = null;
   let handSpreadFrame = 0;
+  let handOffset = 0;
+  let handMaxOffset = 0;
+  let dragFrame = 0;
   let pointerState = null;
   let suppressClickCardId = "";
 
@@ -73,6 +92,8 @@
 
   hydrateSavedInputs();
   bindEvents();
+  primeJoinPanel();
+  updateStageMetrics();
   connect();
   render();
 
@@ -80,8 +101,11 @@
     dom.createRoomBtn.addEventListener("click", () => {
       const name = readName();
       if (!name) return;
+      autoJoinBlocked = false;
+      autoJoinPending = false;
       setStored(STORAGE.playerName, name);
       joinAttemptPending = true;
+      hideJoinPanel();
       send("createRoom", { playerId, name });
     });
 
@@ -90,9 +114,12 @@
       const name = readName();
       const roomCode = readRoomCode();
       if (!name || !roomCode) return;
+      autoJoinBlocked = false;
+      autoJoinPending = false;
       setStored(STORAGE.playerName, name);
       setStored(STORAGE.roomCode, roomCode);
       joinAttemptPending = true;
+      hideJoinPanel();
       send("joinRoom", { playerId, name, roomCode });
     });
 
@@ -107,6 +134,10 @@
     dom.startBtn.addEventListener("click", () => send("startGame"));
     dom.skipBtn.addEventListener("click", () => send("skipPlayer"));
     dom.stopBtn.addEventListener("click", () => send("stopGame"));
+    dom.endSessionBtn.addEventListener("click", () => send("endSession"));
+    dom.checkBtn.addEventListener("click", () => {
+      if (canCheck()) send("check");
+    });
 
     dom.copyRoomBtn.addEventListener("click", () => {
       const code = roomState ? roomState.code : "";
@@ -119,10 +150,6 @@
 
     dom.sortBtn.addEventListener("click", () => {
       sortHandForDisplay();
-    });
-
-    dom.hintBtn.addEventListener("click", () => {
-      showHint();
     });
 
     dom.handPrevBtn.addEventListener("click", () => {
@@ -147,12 +174,70 @@
       }
     });
 
-    window.addEventListener("resize", scheduleHandSpread);
+    dom.closeResultsBtn.addEventListener("click", () => {
+      dom.resultsPanel.hidden = true;
+    });
+    dom.playAgainBtn.addEventListener("click", () => send("startGame"));
+    dom.endSessionResultsBtn.addEventListener("click", () => send("endSession"));
+
+    window.addEventListener("resize", handleViewportChange);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleViewportChange);
+    }
+  }
+
+  function handleViewportChange() {
+    updateStageMetrics();
+    scheduleHandSpread();
+  }
+
+  function primeJoinPanel() {
+    if (getStored(STORAGE.playerName) && getStored(STORAGE.roomCode)) {
+      hideJoinPanel();
+    }
+  }
+
+  function updateStageMetrics() {
+    const viewport = window.visualViewport || {};
+    const width = Math.max(320, viewport.width || window.innerWidth || document.documentElement.clientWidth || 320);
+    const height = Math.max(320, viewport.height || window.innerHeight || document.documentElement.clientHeight || 320);
+    const aspect = width / height;
+    const isSlim = aspect < 0.78;
+    const isCompact = width <= 860 || aspect < 0.96;
+    const tableBounds = dom.feltTable ? dom.feltTable.getBoundingClientRect() : null;
+    const tableBottom = tableBounds && tableBounds.height > 0
+      ? tableBounds.bottom
+      : height * (isSlim ? 0.47 : 0.58);
+
+    const hudScale = clampNumber(0.34, 1, Math.min((width - 28) / 850, height / 520));
+    const utilityScale = clampNumber(0.58, 1, Math.min(width / 760, height / 620));
+    const handBottom = isSlim
+      ? clampNumber(58, 94, height * 0.044)
+      : clampNumber(12, 38, height * 0.022);
+    const targetHandTop = Math.min(height - 220, tableBottom + (isSlim ? 8 : 24));
+    const availableHandHeight = Math.max(180, height - handBottom - targetHandTop);
+    const cardHeightBase = 245 * 1.42;
+    const heightFit = availableHandHeight / cardHeightBase;
+    const slimMax = clampNumber(0.96, 1.56, width / 392);
+    const slimSize = clampNumber(0.78, slimMax, Math.min(heightFit * 0.98, width / 390));
+    const compactMax = clampNumber(0.98, 1.42, width / 500);
+    const compactSize = clampNumber(0.82, compactMax, Math.min(heightFit * 1.02, width / 430));
+    const wideBase = Math.min(width / 980, height / 760) * 0.72;
+    const wideSize = clampNumber(0.42, 0.70, Math.min(wideBase, heightFit * 0.96));
+    const handSize = isSlim ? slimSize : (isCompact ? compactSize : wideSize);
+
+    dom.stage.style.setProperty("--hud-scale", hudScale.toFixed(3));
+    dom.stage.style.setProperty("--host-offset", `${Math.round(126 * hudScale)}px`);
+    dom.stage.style.setProperty("--utility-scale", utilityScale.toFixed(3));
+    dom.handArea.style.setProperty("--hand-card-size", handSize.toFixed(3));
+    dom.handArea.style.setProperty("--hand-bottom", `${Math.round(handBottom)}px`);
   }
 
   function connect() {
     clearTimeout(reconnectTimer);
     setConnectionStatus("Connecting...");
+    const generation = socketGeneration + 1;
+    socketGeneration = generation;
 
     try {
       socket = new WebSocket(serverUrl);
@@ -162,6 +247,7 @@
     }
 
     socket.addEventListener("open", () => {
+      if (generation !== socketGeneration) return;
       reconnectAttempts = 0;
       setConnectionStatus("Connected");
       send("sync", { playerId });
@@ -169,6 +255,7 @@
     });
 
     socket.addEventListener("message", event => {
+      if (generation !== socketGeneration) return;
       let message;
       try {
         message = JSON.parse(event.data);
@@ -179,11 +266,13 @@
     });
 
     socket.addEventListener("close", () => {
+      if (generation !== socketGeneration) return;
       setConnectionStatus("Reconnecting...");
       scheduleReconnect();
     });
 
     socket.addEventListener("error", () => {
+      if (generation !== socketGeneration) return;
       setConnectionStatus("Connection problem");
     });
   }
@@ -197,21 +286,80 @@
 
   function scheduleAutoJoin() {
     clearTimeout(autoJoinTimer);
+    clearTimeout(autoJoinFallbackTimer);
     const savedName = getStored(STORAGE.playerName);
     const savedRoomCode = getStored(STORAGE.roomCode);
-    if (!savedName || !savedRoomCode) {
+    if (autoJoinBlocked || hasConfirmedSeat() || !savedName || !savedRoomCode) {
       autoJoinPending = false;
       return;
     }
 
     autoJoinPending = true;
-    dom.joinPanel.hidden = true;
+    joinAttemptPending = true;
+    if (dom.joinPanel.hidden) {
+      hideJoinPanel();
+    }
     autoJoinTimer = setTimeout(() => {
-      if (!isSelfSeated()) {
-        joinAttemptPending = true;
+      if (!hasConfirmedSeat()) {
         send("joinRoom", { playerId, name: savedName, roomCode: savedRoomCode });
       }
     }, 350);
+    autoJoinFallbackTimer = setTimeout(() => {
+      if (autoJoinPending && !hasConfirmedSeat()) {
+        autoJoinPending = false;
+        joinAttemptPending = false;
+        autoJoinBlocked = true;
+        joinedThisSession = false;
+        showJoinPanelNow();
+      }
+    }, 5000);
+  }
+
+  function hideJoinPanel() {
+    clearTimeout(joinPanelRevealTimer);
+    dom.joinPanel.hidden = true;
+  }
+
+  function showJoinPanelNow() {
+    clearTimeout(joinPanelRevealTimer);
+    if (!shouldShowJoinPanel()) {
+      dom.joinPanel.hidden = true;
+      return;
+    }
+    dom.joinPanel.hidden = false;
+  }
+
+  function requestJoinPanel() {
+    if (!shouldShowJoinPanel()) {
+      dom.joinPanel.hidden = true;
+      return;
+    }
+    clearTimeout(joinPanelRevealTimer);
+    joinPanelRevealTimer = setTimeout(() => {
+      if (shouldShowJoinPanel()) {
+        dom.joinPanel.hidden = false;
+      } else {
+        dom.joinPanel.hidden = true;
+      }
+    }, 450);
+  }
+
+  function shouldShowJoinPanel() {
+    return !autoJoinPending && !joinAttemptPending && !joinedThisSession && !hasConfirmedSeat();
+  }
+
+  function hasConfirmedSeat() {
+    return Boolean(
+      isSelfSeated() ||
+      (
+        privateState.playerId === playerId &&
+        (
+          privateState.hand.length > 0 ||
+          privateState.isTurn ||
+          privateState.mustDiscard
+        )
+      )
+    );
   }
 
   function handleServerMessage(message) {
@@ -227,14 +375,28 @@
           isTurn: false
         };
         selectedCardId = "";
-        dom.joinPanel.hidden = autoJoinPending;
+        if (autoJoinPending || joinAttemptPending) {
+          hideJoinPanel();
+        } else {
+          joinedThisSession = false;
+          requestJoinPanel();
+        }
       } else if (roomState.players.some(player => player.id === playerId)) {
+        joinedThisSession = true;
         autoJoinPending = false;
         joinAttemptPending = false;
-        dom.joinPanel.hidden = true;
+        autoJoinBlocked = false;
+        clearTimeout(autoJoinFallbackTimer);
+        hideJoinPanel();
         setStored(STORAGE.roomCode, roomState.code);
+      } else if (autoJoinPending || joinAttemptPending) {
+        if (!autoJoinPending || dom.joinPanel.hidden) {
+          hideJoinPanel();
+        }
+      } else if (joinedThisSession) {
+        hideJoinPanel();
       } else {
-        dom.joinPanel.hidden = false;
+        requestJoinPanel();
       }
       render();
       return;
@@ -248,6 +410,15 @@
         mustDiscard: Boolean(data.mustDiscard),
         isTurn: Boolean(data.isTurn)
       };
+      if (privateState.playerId === playerId) {
+        joinedThisSession = true;
+        autoJoinPending = false;
+        joinAttemptPending = false;
+        autoJoinBlocked = false;
+        clearTimeout(autoJoinTimer);
+        clearTimeout(autoJoinFallbackTimer);
+        hideJoinPanel();
+      }
       if (!privateState.hand.some(card => card.id === selectedCardId)) {
         selectedCardId = "";
       }
@@ -260,11 +431,20 @@
       return;
     }
 
+    if (message.type === "sessionEnded") {
+      handleSessionEnded(data.message || "The room ended.");
+      return;
+    }
+
     if (message.type === "error") {
       if (joinAttemptPending) {
+        clearTimeout(autoJoinTimer);
+        clearTimeout(autoJoinFallbackTimer);
         autoJoinPending = false;
+        autoJoinBlocked = true;
         joinAttemptPending = false;
-        dom.joinPanel.hidden = false;
+        joinedThisSession = false;
+        showJoinPanelNow();
       }
       showError(data.message || "Action failed.");
     }
@@ -276,6 +456,7 @@
     renderAvatars();
     renderHand();
     renderControls();
+    renderResults();
   }
 
   function renderHud() {
@@ -283,11 +464,13 @@
     const connectedCount = players.filter(player => player.connected).length;
     dom.roomCode.textContent = roomState ? roomState.code : "----";
     dom.playerCount.textContent = `${connectedCount}/${MAX_PLAYERS}`;
-    dom.currentPlayer.textContent = roomState && roomState.currentPlayerName
-      ? `${roomState.currentPlayerName}'s turn`
-      : roomState
-        ? "Waiting for start"
-        : "Waiting for host";
+    if (roomState && roomState.status === "finished") {
+      dom.currentPlayer.textContent = "Game over";
+    } else if (roomState && roomState.currentPlayerName) {
+      dom.currentPlayer.textContent = `${roomState.currentPlayerName}'s turn`;
+    } else {
+      dom.currentPlayer.textContent = roomState ? "Waiting for start" : "Waiting for host";
+    }
     dom.nextPlayer.textContent = roomState && roomState.nextPlayerName ? roomState.nextPlayerName : "--";
   }
 
@@ -298,10 +481,16 @@
 
     dom.stockCount.textContent = String(stockCount);
     dom.discardCount.textContent = String(discardCount);
-    dom.stockPile.style.setProperty("--pile-depth", `${Math.min(22, Math.max(0, stockCount) * 0.42)}px`);
-    dom.discardPile.style.setProperty("--pile-depth", `${Math.min(12, Math.max(0, discardCount) * 0.36)}px`);
-    replaceCard(dom.stockCard, stockCount > 0 ? CardRenderer.renderCard(null, { back: true }) : emptyPile("Empty"));
-    replaceCard(dom.discardCard, discardTop ? CardRenderer.renderCard(discardTop, CARD_RENDER_OPTIONS) : emptyPile("Empty"));
+    renderPile(dom.stockCard, {
+      type: "stock",
+      count: stockCount,
+      topCard: stockCount > 0 ? CardRenderer.renderCard(null, { back: true }) : emptyPile("Empty")
+    });
+    renderPile(dom.discardCard, {
+      type: "discard",
+      count: discardCount,
+      topCard: discardTop ? CardRenderer.renderCard(discardTop, CARD_RENDER_OPTIONS) : emptyPile("Empty")
+    });
 
     const canDrawNow = canDraw();
     dom.stockPile.disabled = !canDrawNow || stockCount < 1;
@@ -318,40 +507,14 @@
         .sort((a, b) => a.seat - b.seat)
       : [];
 
-    const slots = ["top", "left", "right"];
+    const anchors = ["top", "left", "right"];
+    const visibleSeats = Math.max(3, Math.min(MAX_PLAYERS - 1, opponents.length));
 
-    for (let seatIndex = 0; seatIndex < Math.max(3, opponents.length); seatIndex++) {
+    for (let seatIndex = 0; seatIndex < visibleSeats; seatIndex++) {
       const player = opponents[seatIndex] || null;
       const seat = document.createElement("div");
-      const slotClass = slots[seatIndex % slots.length] || "top";
-      seat.className = `avatar-seat opponent-${slotClass}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
-      seat.style.setProperty("--avatar-hue", String((((player && player.seat) || seatIndex + 1) * 47) % 360));
-
-      const avatar = document.createElement("div");
-      avatar.className = "voxel-avatar";
-      avatar.innerHTML = `
-        <span class="voxel-head"></span>
-        <span class="voxel-body"></span>
-        <span class="voxel-arm left"></span>
-        <span class="voxel-arm right"></span>
-        <span class="opponent-cards">
-          <span class="voxel-card"></span>
-          <span class="voxel-card"></span>
-          <span class="voxel-card"></span>
-        </span>
-      `;
-
-      const name = document.createElement("div");
-      name.className = "avatar-name";
-      name.textContent = player ? player.name : "Open Seat";
-
-      const meta = document.createElement("div");
-      meta.className = "avatar-meta";
-      meta.textContent = player ? `${player.handCount || 0} cards${player.isHost ? " | Host" : ""}` : "waiting";
-
-      seat.append(avatar, name, meta);
-      dom.avatarRing.appendChild(seat);
-    }
+      const anchorClass = anchors[seatIndex] ? ` opponent-${anchors[seatIndex]}` : "";
+      seat.className = `avatar-seat opponent-${seatIndex}${anchorClass}${player ? "" : " placeholder"}${player && !player.connected ? " inactive" : ""}`;
       seat.style.setProperty("--avatar-hue", String((((player && player.seat) || seatIndex + 1) * 47) % 360));
 
       const avatar = document.createElement("div");
@@ -384,7 +547,7 @@
   function renderHand() {
     const hand = privateState.hand || [];
     dom.handTrack.innerHTML = "";
-    dom.handTrack.classList.remove("hand-track--overflowing");
+    dom.handTrack.classList.remove("hand-track--overflowing", "hand-track--edge-fill");
 
     hand.forEach((card, index) => {
       const cardButton = document.createElement("button");
@@ -393,6 +556,7 @@
       const canDiscardSelected = isSelected && privateState.mustDiscard && privateState.isTurn;
       cardButton.className = `hand-card${isSelected ? " selected" : ""}${canDiscardSelected ? " can-discard" : ""}`;
       cardButton.style.zIndex = card.id === selectedCardId ? "50" : String(index + 1);
+      cardButton.style.setProperty("--hand-index", String(index + 1));
       cardButton.setAttribute("aria-label", `${card.value} ${card.suit}`);
       cardButton.appendChild(CardRenderer.renderCard(card, CARD_RENDER_OPTIONS));
 
@@ -406,50 +570,31 @@
       });
 
       cardButton.addEventListener("pointerdown", event => {
+        unbindActivePointerListeners();
         pointerState = {
           cardId: card.id,
           element: cardButton,
           startX: event.clientX,
           startY: event.clientY,
           pointerId: event.pointerId,
+          lastTransform: "",
           moved: false
         };
-        cardButton.setPointerCapture(event.pointerId);
-      });
-
-      cardButton.addEventListener("pointermove", event => {
-        if (!pointerState || pointerState.cardId !== card.id || selectedCardId !== card.id || !privateState.mustDiscard || !privateState.isTurn) {
-          return;
-        }
-        const deltaY = event.clientY - pointerState.startY;
-        const deltaX = event.clientX - pointerState.startX;
-        if (deltaY < -8 && Math.abs(deltaY) > Math.abs(deltaX) * 1.1) {
-          event.preventDefault();
-          pointerState.moved = true;
-          cardButton.classList.add("dragging", "selected");
-          cardButton.style.transform = `translate3d(${Math.max(Math.min(deltaX * 0.25, 34), -34)}px, ${Math.max(deltaY - 28, -190)}px, 0) scale(1.08) rotate(0deg)`;
+        bindActivePointerListeners();
+        if (typeof cardButton.setPointerCapture === "function") {
+          try {
+            cardButton.setPointerCapture(event.pointerId);
+          } catch {
+            // Window-level tracking below keeps the drag alive if capture is unavailable.
+          }
         }
       });
 
-      cardButton.addEventListener("pointerup", event => {
-        if (!pointerState || pointerState.cardId !== card.id) {
-          return;
-        }
-        const deltaY = event.clientY - pointerState.startY;
-        cleanupPointerCard(cardButton);
-        if (privateState.mustDiscard && privateState.isTurn && selectedCardId === card.id && deltaY < -72) {
-          suppressClickCardId = card.id;
-          selectedCardId = card.id;
-          discardSelected();
-          return;
-        }
-        pointerState = null;
-      });
+      cardButton.addEventListener("pointermove", handleHandPointerMove);
 
-      cardButton.addEventListener("pointercancel", () => {
-        cleanupPointerCard(cardButton);
-        pointerState = null;
-      });
+      cardButton.addEventListener("pointerup", handleHandPointerEnd);
+
+      cardButton.addEventListener("pointercancel", handleHandPointerCancel);
 
       dom.handTrack.appendChild(cardButton);
     });
@@ -463,15 +608,22 @@
     const self = getSelf();
     const isHost = Boolean(roomState && self && roomState.hostId === playerId);
     const isPlaying = Boolean(roomState && roomState.status === "playing");
+    const isFinished = Boolean(roomState && roomState.status === "finished");
     const connectedCount = roomState ? roomState.players.filter(player => player.connected).length : 0;
     const best = privateState.best || { total: 0, suit: "" };
 
     dom.hostControls.hidden = !isHost;
+    dom.startBtn.textContent = isFinished ? "Play Again" : "Start";
     dom.startBtn.hidden = isPlaying;
     dom.skipBtn.hidden = !isPlaying;
     dom.startBtn.disabled = !roomState || isPlaying || connectedCount < 2;
     dom.skipBtn.disabled = !isHost || !isPlaying;
     dom.stopBtn.disabled = !roomState;
+    dom.endSessionBtn.disabled = !roomState;
+    const checkReady = canCheck();
+    dom.checkBtn.hidden = !roomState || roomState.status !== "playing" || !self;
+    dom.checkBtn.disabled = !checkReady;
+    dom.checkBtn.classList.toggle("check-ready", checkReady);
 
     dom.bestScore.textContent = best.suit ? `${best.total} ${best.suit}` : "0";
     dom.bestScore.classList.toggle("red-score", RED_SUITS.has(best.suit));
@@ -485,8 +637,18 @@
     if (!getSelf()) {
       return "Join this table to take a seat.";
     }
+    if (roomState.status === "finished") {
+      return "Game over. Review final scores.";
+    }
     if (roomState.status !== "playing") {
       return roomState.hostId === playerId ? "Start when everyone is ready." : "Waiting for the host to start.";
+    }
+    if (roomState.checkingPlayerId && privateState.isTurn) {
+      return "Final turn. Draw, then discard.";
+    }
+    if (roomState.checkingPlayerId) {
+      const checker = roomState.players.find(player => player.id === roomState.checkingPlayerId);
+      return `${checker ? checker.name : "A player"} checked. Final turns are underway.`;
     }
     if (privateState.isTurn && privateState.mustDiscard) {
       return "Discard one card.";
@@ -508,36 +670,100 @@
   }
 
   function sortHandForDisplay() {
-    const suitOrder = { "\u2660": 0, "\u2665": 1, "\u2666": 2, "\u2663": 3 };
-    const valueOrder = { A: 1, J: 11, Q: 12, K: 13 };
+    const suitOrder = { "\u2663": 0, "\u2666": 1, "\u2665": 2, "\u2660": 3 };
+    const valueOrder = { J: 11, Q: 12, K: 13, A: 14 };
     privateState.hand = privateState.hand.slice().sort((a, b) => {
-      const suitDiff = (suitOrder[a.suit] ?? 9) - (suitOrder[b.suit] ?? 9);
-      if (suitDiff) return suitDiff;
-      return (valueOrder[a.value] || Number(a.value) || 0) - (valueOrder[b.value] || Number(b.value) || 0);
+      const valueDiff = (valueOrder[a.value] || Number(a.value) || 0) - (valueOrder[b.value] || Number(b.value) || 0);
+      if (valueDiff) return valueDiff;
+      return (suitOrder[a.suit] ?? 9) - (suitOrder[b.suit] ?? 9);
     });
     renderHand();
   }
 
-  function showHint() {
-    const best = privateState.best || { total: 0, suit: "" };
-    if (!roomState) {
-      showToast("Create or join a room first.");
+  function renderResults() {
+    if (!roomState || roomState.status !== "finished") {
+      dom.resultsPanel.hidden = true;
       return;
     }
-    if (privateState.isTurn && !privateState.mustDiscard) {
-      showToast("Draw from New or Dead Pile.");
-      return;
+
+    const results = Array.isArray(roomState.results) ? roomState.results : [];
+    const winners = results.filter(row => row.isWinner);
+    const isHost = Boolean(roomState.hostId === playerId);
+    dom.resultsTitle.textContent = winners.length > 1
+      ? "Tie Game"
+      : winners[0]
+        ? `${winners[0].name} Wins`
+        : "Game Over";
+    dom.resultsReason.textContent = resultsReasonText();
+    dom.resultsList.innerHTML = "";
+
+    if (!results.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "No final scores are available.";
+      dom.resultsList.appendChild(empty);
     }
-    if (privateState.isTurn && privateState.mustDiscard) {
-      showToast("Pick one card to discard back to 3 cards.");
-      return;
+
+    results.forEach(row => {
+      const item = document.createElement("article");
+      item.className = `result-row${row.isWinner ? " result-row--winner" : ""}${row.id === playerId ? " result-row--self" : ""}`;
+
+      const rank = document.createElement("span");
+      rank.className = "result-rank";
+      rank.textContent = `#${row.rank}`;
+
+      const identity = document.createElement("div");
+      identity.className = "result-identity";
+      const name = document.createElement("strong");
+      name.textContent = row.name;
+      const meta = document.createElement("span");
+      meta.textContent = row.isWinner ? "Winner" : "Final hand";
+      identity.append(name, meta);
+
+      const hand = document.createElement("div");
+      hand.className = "result-hand";
+      (Array.isArray(row.hand) ? row.hand : []).forEach(card => {
+        const mini = CardRenderer.renderCard(card, { ...CARD_RENDER_OPTIONS, size: "mini" });
+        hand.appendChild(mini);
+      });
+
+      const score = document.createElement("div");
+      score.className = "result-score";
+      const total = document.createElement("strong");
+      total.textContent = row.suit ? `${row.total} ${row.suit}` : String(row.total || 0);
+      const diff = document.createElement("span");
+      diff.textContent = `${row.difference}`;
+      score.append(total, diff);
+
+      item.append(rank, identity, hand, score);
+      dom.resultsList.appendChild(item);
+    });
+
+    dom.playAgainBtn.hidden = !isHost;
+    dom.endSessionResultsBtn.hidden = !isHost;
+    dom.resultsPanel.hidden = false;
+  }
+
+  function resultsReasonText() {
+    if (!roomState) return "";
+    if (roomState.finishReason === "deck") {
+      return "The deck ran out.";
     }
-    showToast(best.suit ? `Your best suit is ${best.total} ${best.suit}.` : "Wait for your cards to be dealt.");
+    if (roomState.finishReason === "check") {
+      const checker = roomState.players.find(player => player.id === roomState.checkingPlayerId);
+      return `${checker ? checker.name : "A player"} checked. Everyone else took one final turn.`;
+    }
+    return "Final scores.";
   }
 
   function scrollHand(direction) {
-    const distance = Math.max(140, dom.handScroller.clientWidth * 0.45);
-    dom.handScroller.scrollBy({ left: distance * direction, behavior: "smooth" });
+    const distance = Math.max(150, dom.handArea.clientWidth * 0.34);
+    handOffset = clampNumber(0, handMaxOffset, handOffset + distance * direction);
+    applyHandOffset();
+  }
+
+  function clampNumber(min, max, value) {
+    return Math.min(max, Math.max(min, value));
   }
 
   function scheduleHandSpread() {
@@ -549,22 +775,41 @@
     const cards = Array.from(dom.handTrack.querySelectorAll(".hand-card"));
     if (cards.length <= 1) {
       dom.handTrack.style.setProperty("--hand-overlap", "0px");
-      dom.handTrack.classList.remove("hand-track--overflowing");
+      dom.handTrack.style.removeProperty("--hand-spread-width");
+      dom.handTrack.classList.remove("hand-track--overflowing", "hand-track--edge-fill");
+      handOffset = 0;
+      handMaxOffset = 0;
+      applyHandOffset();
       return;
     }
 
-    const firstCard = cards[0].querySelector(".playing-card");
+    const firstRealCard = cards.find(card => !card.classList.contains("hand-card-placeholder"));
+    const firstCard = firstRealCard ? firstRealCard.querySelector(".playing-card") : null;
     const cardWidth = firstCard ? firstCard.getBoundingClientRect().width : 150;
-    const available = Math.max(cardWidth, dom.handScroller.clientWidth - 24);
-    const minStep = Math.min(cardWidth - 2, Math.max(48, cardWidth * 0.38));
-    const maxStep = cardWidth * (cards.length <= 3 ? 0.82 : 0.74);
+    const available = Math.max(cardWidth, dom.handArea.clientWidth - 8);
+    const minStep = Math.min(cardWidth - 2, Math.max(64, cardWidth * (cards.length <= 4 ? 0.42 : 0.34)));
+    const maxStep = cardWidth * (cards.length <= 3 ? 0.88 : 0.78);
     const fitStep = (available - cardWidth) / (cards.length - 1);
     const step = Math.max(minStep, Math.min(maxStep, fitStep));
     const overlap = Math.max(0, Math.round(cardWidth - step));
     const spreadWidth = cardWidth + (cards.length - 1) * (cardWidth - overlap);
+    const isOverflowing = spreadWidth > available + 2;
+    const fillsEdges = isOverflowing || available < 900;
+    const renderWidth = fillsEdges ? Math.max(spreadWidth, available) : spreadWidth;
 
     dom.handTrack.style.setProperty("--hand-overlap", `${overlap}px`);
-    dom.handTrack.classList.toggle("hand-track--overflowing", spreadWidth > available + 2);
+    dom.handTrack.style.setProperty("--hand-spread-width", `${Math.ceil(renderWidth)}px`);
+    dom.handTrack.classList.toggle("hand-track--overflowing", isOverflowing);
+    dom.handTrack.classList.toggle("hand-track--edge-fill", fillsEdges);
+    handMaxOffset = isOverflowing ? Math.max(0, spreadWidth - available + 16) : 0;
+    handOffset = clampNumber(0, handMaxOffset, handOffset);
+    applyHandOffset();
+  }
+
+  function applyHandOffset() {
+    dom.handTrack.style.setProperty("--hand-shift", `${Math.round(-handOffset)}px`);
+    dom.handPrevBtn.disabled = handMaxOffset <= 0 || handOffset <= 1;
+    dom.handNextBtn.disabled = handMaxOffset <= 0 || handOffset >= handMaxOffset - 1;
   }
 
   function copyText(text) {
@@ -581,6 +826,17 @@
     return Boolean(roomState && roomState.status === "playing" && privateState.isTurn && !privateState.mustDiscard);
   }
 
+  function canCheck() {
+    return Boolean(
+      roomState &&
+      roomState.status === "playing" &&
+      !roomState.checkingPlayerId &&
+      privateState.isTurn &&
+      !privateState.mustDiscard &&
+      privateState.hand.length === 3
+    );
+  }
+
   function getSelf() {
     return roomState ? roomState.players.find(player => player.id === playerId) : null;
   }
@@ -589,9 +845,38 @@
     return Boolean(getSelf());
   }
 
-  function replaceCard(target, element) {
+  function renderPile(target, options) {
+    const count = Math.max(0, Number(options.count) || 0);
+    const visibleLayers = Math.min(Math.max(0, count - 1), 12);
+    const maxDepth = options.type === "stock" ? 24 : 12;
+    const physicalDepth = Math.min(maxDepth, Math.max(0, count - 1) * 0.72);
+    const layerStepY = visibleLayers > 0 ? Math.max(1.10, physicalDepth / visibleLayers) : 0;
+    const layerStepX = layerStepY * 0.30;
+
     target.innerHTML = "";
-    target.appendChild(element);
+    target.className = `pile-card pile-card--${options.type}${count === 0 ? " pile-card--empty" : ""}`;
+    target.style.setProperty("--pile-depth", `${physicalDepth.toFixed(1)}px`);
+    target.style.setProperty("--visible-layers", String(visibleLayers));
+    target.style.setProperty("--layer-step-x", `${layerStepX.toFixed(2)}px`);
+    target.style.setProperty("--layer-step-y", `${layerStepY.toFixed(2)}px`);
+
+    const stack = document.createElement("span");
+    stack.className = `pile-stack pile-stack--${options.type}`;
+
+    for (let layerNumber = visibleLayers; layerNumber >= 1; layerNumber--) {
+      const layer = document.createElement("span");
+      layer.className = `pile-under-card pile-under-card--${options.type}`;
+      layer.style.setProperty("--layer", String(layerNumber));
+      layer.style.setProperty("--z", String(visibleLayers - layerNumber + 1));
+      layer.style.setProperty("--tilt", `${layerNumber % 2 === 0 ? -0.12 : 0.10}deg`);
+      stack.appendChild(layer);
+    }
+
+    const top = document.createElement("span");
+    top.className = "pile-top-card";
+    top.appendChild(options.topCard);
+    stack.appendChild(top);
+    target.appendChild(stack);
   }
 
   function emptyPile(text) {
@@ -601,7 +886,198 @@
     return element;
   }
 
-  function cleanupPointerCard(cardButton) {
+  function queueDragTransform(cardButton, transform) {
+    if (!pointerState) {
+      return;
+    }
+    pointerState.lastTransform = transform;
+    if (dragFrame) {
+      return;
+    }
+    dragFrame = requestAnimationFrame(() => {
+      dragFrame = 0;
+      if (pointerState && pointerState.element === cardButton) {
+        cardButton.style.transform = pointerState.lastTransform;
+      }
+    });
+  }
+
+  function bindActivePointerListeners() {
+    window.addEventListener("pointermove", handleHandPointerMove, { passive: false });
+    window.addEventListener("pointerup", handleHandPointerEnd);
+    window.addEventListener("pointercancel", handleHandPointerCancel);
+  }
+
+  function unbindActivePointerListeners() {
+    window.removeEventListener("pointermove", handleHandPointerMove);
+    window.removeEventListener("pointerup", handleHandPointerEnd);
+    window.removeEventListener("pointercancel", handleHandPointerCancel);
+  }
+
+  function handleHandPointerMove(event) {
+    if (
+      !pointerState ||
+      event.pointerId !== pointerState.pointerId ||
+      !privateState.mustDiscard ||
+      !privateState.isTurn
+    ) {
+      return;
+    }
+
+    const cardButton = pointerState.element;
+    const deltaY = event.clientY - pointerState.startY;
+    const deltaX = event.clientX - pointerState.startX;
+    if (deltaY < -6 && Math.abs(deltaY) > Math.abs(deltaX) * 0.72) {
+      event.preventDefault();
+      selectedCardId = pointerState.cardId;
+      pointerState.moved = true;
+      dom.handTrack.querySelectorAll(".hand-card.selected, .hand-card.can-discard").forEach(card => {
+        if (card !== cardButton) {
+          card.classList.remove("selected", "can-discard");
+        }
+      });
+      cardButton.classList.add("dragging", "selected", "can-discard");
+      liftCardForDrag(cardButton);
+      queueDragTransform(
+        cardButton,
+        `translate3d(${Math.max(Math.min(deltaX * 0.25, 38), -38)}px, ${Math.max(deltaY - 18, -460)}px, 0) scale(1.04) rotate(0deg)`
+      );
+    }
+  }
+
+  function handleHandPointerEnd(event) {
+    if (!pointerState || event.pointerId !== pointerState.pointerId) {
+      return;
+    }
+
+    const cardButton = pointerState.element;
+    const cardId = pointerState.cardId;
+    const deltaY = event.clientY - pointerState.startY;
+    const shouldDiscard = privateState.mustDiscard && privateState.isTurn && pointerState.moved && deltaY < -58;
+    unbindActivePointerListeners();
+
+    if (shouldDiscard) {
+      releasePointerCard(cardButton);
+      suppressClickCardId = cardId;
+      selectedCardId = cardId;
+      animateDiscardToPile(cardButton);
+      return;
+    }
+
+    if (pointerState.moved) {
+      suppressClickCardId = cardId;
+      selectedCardId = cardId;
+    }
+    cleanupPointerCard(cardButton);
+    pointerState = null;
+  }
+
+  function handleHandPointerCancel(event) {
+    if (!pointerState || event.pointerId !== pointerState.pointerId) {
+      return;
+    }
+
+    const cardButton = pointerState.element;
+    unbindActivePointerListeners();
+    cleanupPointerCard(cardButton);
+    pointerState = null;
+  }
+
+  function liftCardForDrag(cardButton) {
+    if (!pointerState || pointerState.floating) {
+      return;
+    }
+
+    const cardBounds = cardButton.getBoundingClientRect();
+    const cardSize = getComputedStyle(cardButton).getPropertyValue("--hand-card-size").trim()
+      || getComputedStyle(dom.handArea).getPropertyValue("--hand-card-size").trim()
+      || "1";
+    pointerState.originParent = cardButton.parentNode;
+    pointerState.originNext = cardButton.nextSibling;
+    pointerState.hadInlineCardSize = cardButton.style.getPropertyValue("--hand-card-size") !== "";
+    pointerState.renderedCard = cardButton.querySelector(".playing-card");
+    pointerState.hadInlineRenderedSize = Boolean(pointerState.renderedCard && pointerState.renderedCard.style.getPropertyValue("--card-size"));
+    pointerState.floating = true;
+
+    const placeholder = document.createElement("span");
+    placeholder.className = "hand-card hand-card-placeholder";
+    placeholder.setAttribute("aria-hidden", "true");
+    placeholder.style.width = `${cardBounds.width}px`;
+    placeholder.style.height = `${cardBounds.height}px`;
+    placeholder.style.setProperty("--hand-index", cardButton.style.getPropertyValue("--hand-index") || "1");
+    pointerState.placeholder = placeholder;
+    pointerState.originParent.insertBefore(placeholder, cardButton);
+
+    cardButton.classList.add("floating-hand-card");
+    cardButton.style.setProperty("--hand-card-size", cardSize);
+    cardButton.style.setProperty("--card-size", cardSize);
+    if (pointerState.renderedCard) {
+      pointerState.renderedCard.style.setProperty("--card-size", cardSize);
+    }
+    cardButton.style.left = `${cardBounds.left}px`;
+    cardButton.style.top = `${cardBounds.top}px`;
+    cardButton.style.width = `${cardBounds.width}px`;
+    cardButton.style.height = `${cardBounds.height}px`;
+    cardButton.style.transform = "";
+    document.body.appendChild(cardButton);
+  }
+
+  function restoreFloatingCard(cardButton) {
+    if (!pointerState || !pointerState.floating || !pointerState.originParent) {
+      return;
+    }
+
+    cardButton.classList.remove("floating-hand-card");
+    cardButton.style.left = "";
+    cardButton.style.top = "";
+    cardButton.style.width = "";
+    cardButton.style.height = "";
+    cardButton.style.opacity = "";
+    if (!pointerState.hadInlineCardSize) {
+      cardButton.style.removeProperty("--hand-card-size");
+      cardButton.style.removeProperty("--card-size");
+    }
+    if (pointerState.renderedCard && !pointerState.hadInlineRenderedSize) {
+      pointerState.renderedCard.style.removeProperty("--card-size");
+    }
+
+    const placeholder = pointerState.placeholder;
+    if (placeholder && placeholder.parentNode === pointerState.originParent) {
+      pointerState.originParent.insertBefore(cardButton, placeholder);
+      placeholder.remove();
+      return;
+    }
+    pointerState.originParent.insertBefore(cardButton, pointerState.originNext);
+  }
+
+  function animateDiscardToPile(cardButton) {
+    const from = cardButton.getBoundingClientRect();
+    const to = dom.discardPile.getBoundingClientRect();
+    const deltaX = to.left + to.width / 2 - (from.left + from.width / 2);
+    const deltaY = to.top + to.height / 2 - (from.top + from.height / 2);
+    const placeholder = pointerState ? pointerState.placeholder : null;
+
+    if (dragFrame) {
+      cancelAnimationFrame(dragFrame);
+      dragFrame = 0;
+    }
+    cardButton.classList.remove("dragging");
+    cardButton.classList.add("discarding");
+    requestAnimationFrame(() => {
+      cardButton.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale(.42) rotate(-6deg)`;
+      cardButton.style.opacity = ".08";
+    });
+    pointerState = null;
+    window.setTimeout(() => {
+      if (placeholder) {
+        placeholder.remove();
+      }
+      cardButton.remove();
+      discardSelected();
+    }, 190);
+  }
+
+  function releasePointerCard(cardButton) {
     if (pointerState && typeof cardButton.releasePointerCapture === "function") {
       try {
         if (cardButton.hasPointerCapture(pointerState.pointerId)) {
@@ -611,16 +1087,61 @@
         // Pointer capture may already be released by the browser.
       }
     }
+  }
+
+  function cleanupPointerCard(cardButton) {
+    releasePointerCard(cardButton);
+    if (dragFrame) {
+      cancelAnimationFrame(dragFrame);
+      dragFrame = 0;
+    }
     cardButton.classList.remove("dragging");
+    restoreFloatingCard(cardButton);
     cardButton.style.transform = "";
   }
 
   function send(type, data = {}) {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (joinAttemptPending) {
+        clearTimeout(autoJoinTimer);
+        clearTimeout(autoJoinFallbackTimer);
+        autoJoinPending = false;
+        joinAttemptPending = false;
+        showJoinPanelNow();
+      }
       showError("The game server is not connected yet.");
-      return;
+      return false;
     }
     socket.send(JSON.stringify({ type, data }));
+    return true;
+  }
+
+  function handleSessionEnded(message) {
+    clearTimeout(autoJoinTimer);
+    clearTimeout(autoJoinFallbackTimer);
+    clearTimeout(joinPanelRevealTimer);
+    autoJoinPending = false;
+    autoJoinBlocked = true;
+    joinAttemptPending = false;
+    joinedThisSession = false;
+    roomState = null;
+    privateState = {
+      playerId,
+      hand: [],
+      best: { total: 0, suit: "" },
+      mustDiscard: false,
+      isTurn: false
+    };
+    selectedCardId = "";
+    clearSavedSession();
+    dom.playerNameInput.value = "";
+    dom.roomCodeInput.value = "";
+    render();
+    dom.joinPanel.hidden = false;
+    showToast(message);
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 650);
   }
 
   function showError(message) {
@@ -677,20 +1198,29 @@
   function resolveServerUrl() {
     const params = new URLSearchParams(window.location.search);
     const override = params.get("server");
-    if (override) {
+    if (override && !isLoopbackServerUrl(override)) {
       return override;
     }
 
     const saved = getStored(STORAGE.serverUrl);
-    if (saved) {
+    if (saved && !isLoopbackServerUrl(saved)) {
       return saved;
     }
 
-    const localHostnames = new Set(["", "localhost", "127.0.0.1"]);
-    if (window.location.protocol === "file:" || localHostnames.has(window.location.hostname)) {
-      return "ws://localhost:8787/ws";
+    const frontendLocalHostnames = new Set(["", "localhost", "127.0.0.1"]);
+    if (window.location.protocol === "file:" || frontendLocalHostnames.has(window.location.hostname)) {
+      return "ws://192.168.0.32:8787/ws";
     }
     return "wss://cardgames.duckdns.org/ws";
+  }
+
+  function isLoopbackServerUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    } catch {
+      return false;
+    }
   }
 
   function ensurePlayerId() {
@@ -724,6 +1254,25 @@
     return getCookie(key);
   }
 
+  function clearSavedSession() {
+    try {
+      for (const key of Object.values(STORAGE)) {
+        window.localStorage.removeItem(key);
+      }
+      window.sessionStorage.clear();
+    } catch {
+      // Ignore storage failures in private browsing.
+    }
+    for (const key of Object.values(STORAGE)) {
+      clearCookie(key);
+    }
+    if (window.caches && window.caches.keys) {
+      window.caches.keys()
+        .then(keys => Promise.all(keys.map(key => window.caches.delete(key))))
+        .catch(() => {});
+    }
+  }
+
   function setStored(key, value) {
     try {
       window.localStorage.setItem(key, value);
@@ -745,5 +1294,9 @@
   function setCookie(key, value) {
     const maxAge = 60 * 60 * 24 * 180;
     document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; SameSite=Lax`;
+  }
+
+  function clearCookie(key) {
+    document.cookie = `${encodeURIComponent(key)}=; max-age=0; path=/; SameSite=Lax`;
   }
 })();
