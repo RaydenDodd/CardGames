@@ -13,6 +13,7 @@
     stage: document.querySelector(".game-stage"),
     roomCode: document.getElementById("roomCode"),
     copyRoomBtn: document.getElementById("copyRoomBtn"),
+    turnCard: document.querySelector(".turn-card"),
     connectionStatus: document.getElementById("connectionStatus"),
     currentPlayer: document.getElementById("currentPlayer"),
     nextPlayer: document.getElementById("nextPlayer"),
@@ -462,6 +463,10 @@
   function renderHud() {
     dom.roomCode.textContent = roomState ? roomState.code : "----";
     dom.playerCount.textContent = `${displayPlayerCount()}/${MAX_PLAYERS}`;
+    dom.turnCard.classList.toggle(
+      "current-turn",
+      Boolean(roomState && roomState.status === "playing" && roomState.currentTurnPlayerId === playerId)
+    );
     if (roomState && roomState.status === "finished") {
       dom.currentPlayer.textContent = "Game over";
     } else if (roomState && roomState.currentPlayerName) {
