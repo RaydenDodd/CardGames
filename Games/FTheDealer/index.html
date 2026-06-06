@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../style.css" />
   <link rel="stylesheet" href="../../card-renderer.css" />
 </head>
-<body>
+<body class="f-dealer-page">
   <header class="nav">
     <div class="nav-left">
       <a class="brand" href="../index.html">Card Games</a>
@@ -62,11 +62,13 @@
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
 
+    const CARD_RENDER_OPTIONS = { assetBasePath: "../../assets/courts/white" };
+
     const suits = [
-      { s: "♠", c: "black" },
-      { s: "♥", c: "red" },
-      { s: "♦", c: "red" },
-      { s: "♣", c: "black" }
+      { s: "\u2660", c: "black" },
+      { s: "\u2665", c: "red" },
+      { s: "\u2666", c: "red" },
+      { s: "\u2663", c: "black" }
     ];
 
     const values = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
@@ -137,11 +139,11 @@
       }
 
       if (!currentCard) {
-        el.appendChild(CardRenderer.renderCard(null, { size: "large", back: true }));
+        el.appendChild(CardRenderer.renderCard(null, { ...CARD_RENDER_OPTIONS, size: "large", back: true }));
         return;
       }
 
-      el.appendChild(CardRenderer.renderCard(currentCard, { size: "large" }));
+      el.appendChild(CardRenderer.renderCard(currentCard, { ...CARD_RENDER_OPTIONS, size: "large" }));
     }
 
     function renderSeenCards() {
@@ -161,7 +163,7 @@
         stack.className = "card-stack";
 
         cards.forEach((card, index) => {
-          const mini = CardRenderer.renderCard(card, { size: "mini" });
+          const mini = CardRenderer.renderCard(card, { ...CARD_RENDER_OPTIONS, size: "mini" });
           mini.style.top = `${index * 12}px`;
           mini.style.zIndex = index;
           stack.appendChild(mini);

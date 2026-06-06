@@ -31,6 +31,49 @@ body, button, input, textarea, select {
   font-family: inherit;
 }
 
+body.f-dealer-page {
+  min-height:100svh;
+  background:
+    radial-gradient(ellipse at 50% 28%, rgba(94,174,96,.38), transparent 54%),
+    radial-gradient(ellipse at 50% 72%, rgba(10,20,13,.70), transparent 68%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 9px),
+    linear-gradient(145deg, #143f28 0%, #0d2f1f 46%, #06120d 100%);
+  background-attachment:fixed;
+}
+
+.f-dealer-page .teaser-inner,
+.f-dealer-page .panel,
+.f-dealer-page .tracker,
+.f-dealer-page .status {
+  border-color:rgba(216,255,204,.18);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(119,199,111,.18), transparent 62%),
+    linear-gradient(180deg, rgba(6,30,18,.82), rgba(3,13,9,.76));
+  box-shadow:
+    0 24px 72px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.10);
+}
+
+.f-dealer-page .dealer-card-slot {
+  border:1px solid rgba(216,255,204,.13);
+  border-radius:22px;
+  background:
+    radial-gradient(ellipse at center, rgba(76,161,79,.34), transparent 62%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, transparent 1px 8px),
+    linear-gradient(135deg, rgba(14,82,43,.76), rgba(5,28,17,.82));
+  box-shadow:
+    inset 0 0 0 5px rgba(255,255,255,.035),
+    inset 0 22px 70px rgba(255,255,255,.035),
+    inset 0 -34px 88px rgba(0,0,0,.34);
+}
+
+.f-dealer-page .value-stack {
+  border:1px solid rgba(216,255,204,.12);
+  background:
+    linear-gradient(180deg, rgba(11,54,32,.72), rgba(4,20,13,.68));
+}
+
 a { color:inherit; text-decoration:none; }
 a:hover { opacity:.92; }
 
