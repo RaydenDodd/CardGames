@@ -1053,6 +1053,9 @@
     if (roomState.finishReason === "leave") {
       return "A player left and not enough players remained.";
     }
+    if (roomState.finishReason === "forfeit") {
+      return "A player forfeited and is a sore loser.";
+    }
     return "Final scores.";
   }
 

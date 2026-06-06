@@ -8,6 +8,7 @@ const PORT = Number(process.env.PORT || 8787);
 const MAX_PLAYERS = 10;
 const MAX_ROOMS = 3;
 const NUDGE_COOLDOWN_MS = 10000;
+const DISCONNECT_FORFEIT_MS = 30 * 1000;
 const ROOM_IDLE_MS = 10 * 60 * 1000;
 const ROOM_CLEANUP_MS = 60 * 1000;
 const SNAPSHOT_PATH = path.join(__dirname, "data", "state.json");
@@ -23,6 +24,7 @@ const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"
 let rooms = loadSnapshot();
 let room = null;
 const sockets = new Map();
+const disconnectForfeitTimers = new Map();
 
 const app = express();
 app.use(express.json());
@@ -88,7 +90,12 @@ wss.on("connection", ws => {
       if (targetRoom && !hasOpenSocket(roomCode, playerId)) {
         room = targetRoom;
         const player = markDisconnected(playerId);
-        broadcast(player ? `${player.name} disconnected.` : undefined);
+        const pendingForfeit = Boolean(player && room.pendingDisconnectForfeit && room.pendingDisconnectForfeit.playerId === player.id);
+        broadcast(player
+          ? pendingForfeit
+            ? `${player.name} disconnected. Waiting 30 seconds for them to reconnect.`
+            : `${player.name} disconnected.`
+          : undefined);
         room = null;
       }
     }
@@ -254,6 +261,7 @@ function joinRoom(ws, data) {
   player.connected = true;
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
+  cancelDisconnectForfeitForPlayer(player.id);
   touchRoom();
   saveSnapshot();
   broadcast(wasReconnect
@@ -286,6 +294,7 @@ function syncPlayer(ws, data) {
   player.connected = true;
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
+  cancelDisconnectForfeitForPlayer(player.id);
   touchRoom();
   saveSnapshot();
   broadcast(wasReconnect ? `${player.name} rejoined.` : undefined);
@@ -294,6 +303,7 @@ function syncPlayer(ws, data) {
 
 function startGame(player) {
   requireHost(player);
+  clearDisconnectForfeit(room);
   if (room.status === "finished") {
     resetRoomToLobby("Game reset. Players can join before the host starts.");
     return;
@@ -339,6 +349,7 @@ function stopGame(player) {
 }
 
 function resetRoomToLobby(toastMessage) {
+  clearDisconnectForfeit(room);
   for (const p of room.players) {
     p.hand = [];
   }
@@ -494,7 +505,12 @@ function leaveSeat(player) {
   if (wasPlaying) {
     const activePlayers = activePlayersInTurnOrder();
     if (activePlayers.length < 2) {
-      finishGame("leave", `${playerName} left. Not enough players remain.`);
+      if (scheduleDisconnectForfeit(player)) {
+        saveSnapshot();
+        broadcast(`${playerName} left. Waiting 30 seconds for them to reconnect.`);
+      } else {
+        finishGame("leave", `${playerName} left. Not enough players remain.`);
+      }
       return;
     }
     if (room.checkingPlayerId && wasFinalTurnPlayer && !room.finalTurnPlayerIds.length) {
@@ -558,8 +574,82 @@ function markDisconnected(playerId) {
   player.connected = false;
   player.lastSeen = Date.now();
   touchRoom();
+  scheduleDisconnectForfeit(player);
   saveSnapshot();
   return player;
+}
+
+function scheduleDisconnectForfeit(player) {
+  if (!room || !player || room.status !== "playing") {
+    return false;
+  }
+  if (connectedPlayersInSeatOrder().length >= 2) {
+    clearDisconnectForfeit(room);
+    return false;
+  }
+
+  const deadlineAt = Date.now() + DISCONNECT_FORFEIT_MS;
+  room.pendingDisconnectForfeit = {
+    playerId: player.id,
+    playerName: player.name,
+    deadlineAt
+  };
+  clearTimeout(disconnectForfeitTimers.get(room.code));
+  disconnectForfeitTimers.set(room.code, setTimeout(() => {
+    resolveDisconnectForfeit(room.code, player.id);
+  }, DISCONNECT_FORFEIT_MS));
+  return true;
+}
+
+function resolveDisconnectForfeit(roomCode, playerId) {
+  const targetRoom = rooms.get(roomCode);
+  if (!targetRoom) {
+    disconnectForfeitTimers.delete(roomCode);
+    return;
+  }
+
+  room = targetRoom;
+  const pending = room.pendingDisconnectForfeit || null;
+  const player = room.players.find(p => p.id === playerId);
+  if (
+    room.status !== "playing" ||
+    !pending ||
+    pending.playerId !== playerId ||
+    !player ||
+    player.connected ||
+    connectedPlayersInSeatOrder().length >= 2
+  ) {
+    clearDisconnectForfeit(room);
+    saveSnapshot();
+    broadcast();
+    room = null;
+    return;
+  }
+
+  const playerName = pending.playerName || player.name || "A player";
+  clearDisconnectForfeit(room);
+  finishGame("forfeit", `${playerName} forfeited and is a sore loser.`);
+  room = null;
+}
+
+function cancelDisconnectForfeitForPlayer(playerId) {
+  if (!room || !room.pendingDisconnectForfeit || room.pendingDisconnectForfeit.playerId !== playerId) {
+    return false;
+  }
+  clearDisconnectForfeit(room);
+  return true;
+}
+
+function clearDisconnectForfeit(targetRoom = room) {
+  if (!targetRoom) {
+    return;
+  }
+  const timer = disconnectForfeitTimers.get(targetRoom.code);
+  if (timer) {
+    clearTimeout(timer);
+    disconnectForfeitTimers.delete(targetRoom.code);
+  }
+  delete targetRoom.pendingDisconnectForfeit;
 }
 
 function reassignPlayerId(player, nextId) {
@@ -757,6 +847,7 @@ function playersAfter(playerId) {
 }
 
 function finishGame(reason, toastMessage) {
+  clearDisconnectForfeit(room);
   room.status = "finished";
   room.currentTurnPlayerId = null;
   room.turnOrderPlayerIds = [];
@@ -1106,6 +1197,7 @@ function closeRoom(targetRoom, message) {
   if (!targetRoom) {
     return;
   }
+  clearDisconnectForfeit(targetRoom);
   rooms.delete(targetRoom.code);
   for (const ws of wss.clients) {
     if (ws.readyState !== WebSocket.OPEN || ws.roomCode !== targetRoom.code) {
@@ -1184,6 +1276,7 @@ function loadSnapshot() {
       candidate.nudgeReadyAt = Number(candidate.nudgeReadyAt) || (Date.now() + NUDGE_COOLDOWN_MS);
       candidate.createdAt = Number(candidate.createdAt) || Date.now();
       candidate.lastActivityAt = Number(candidate.lastActivityAt) || candidate.createdAt;
+      delete candidate.pendingDisconnectForfeit;
       restored.set(candidate.code, candidate);
     }
     return restored;
@@ -1200,7 +1293,11 @@ function saveSnapshot() {
   }
   try {
     fs.mkdirSync(path.dirname(SNAPSHOT_PATH), { recursive: true });
-    const snapshot = { rooms: Array.from(rooms.values()).map(activeRoom => JSON.parse(JSON.stringify(activeRoom))) };
+    const snapshot = { rooms: Array.from(rooms.values()).map(activeRoom => {
+      const snapshotRoom = JSON.parse(JSON.stringify(activeRoom));
+      delete snapshotRoom.pendingDisconnectForfeit;
+      return snapshotRoom;
+    }) };
     fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
   } catch (error) {
     console.error("Failed to save snapshot:", error);
