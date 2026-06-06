@@ -1,3 +1,10 @@
-cardgames.duckdns.org {
-	reverse_proxy 127.0.0.1:8787
+raydencardgames.duckdns.org {
+    reverse_proxy /ws localhost:8787
+    reverse_proxy /health localhost:8787
+
+    respond "CardGames backend is running"
+}
+
+wmatavisualization.duckdns.org {
+    reverse_proxy localhost:8050
 }

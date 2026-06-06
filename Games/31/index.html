@@ -30,11 +30,16 @@
       <button id="helpBtn" class="trophy-button" type="button">?</button>
     </section>
 
-    <section class="host-controls" id="hostControls" hidden aria-label="Host controls">
+    <section class="host-controls" id="hostControls" hidden aria-label="Room controls">
       <button id="startBtn" class="glass-button" type="button">Start</button>
       <button id="skipBtn" class="glass-button" type="button">Skip</button>
       <button id="stopBtn" class="glass-button" type="button">Reset</button>
       <button id="endSessionBtn" class="glass-button danger" type="button">End Room</button>
+      <button id="leaveSeatBtn" class="glass-button danger" type="button">Leave</button>
+    </section>
+
+    <section class="nudge-controls" id="nudgeControls" hidden aria-label="Nudge controls">
+      <button id="nudgeBtn" class="glass-button nudge-button" type="button">Nudge</button>
     </section>
 
     <section class="table-scene" aria-label="Players and card table">
@@ -75,7 +80,7 @@
   <section id="joinPanel" class="join-panel" aria-label="Join 31 room">
     <form id="joinForm" class="join-card">
       <h1>31 / Blitz</h1>
-      <p class="muted">Create a table or join with a room code. Your device remembers your seat if you refresh.</p>
+      <p class="muted">Create a table or join with a room code. Rejoin with the same name to reclaim your hand.</p>
       <label>
         Name
         <input id="playerNameInput" autocomplete="nickname" maxlength="24" placeholder="Your name" />
@@ -117,6 +122,22 @@
       </div>
     </div>
   </section>
+
+  <section id="leaveConfirmPanel" class="leave-confirm-panel" hidden role="dialog" aria-modal="true" aria-labelledby="leaveConfirmTitle">
+    <div class="leave-confirm-card">
+      <h2 id="leaveConfirmTitle">Leave the table?</h2>
+      <p class="muted">Are you sure you want to leave? If the game is running, your turn will be skipped and your hand will be saved for same-name rejoin.</p>
+      <div class="leave-confirm-actions">
+        <button id="cancelLeaveBtn" class="glass-button" type="button">Stay</button>
+        <button id="confirmLeaveBtn" class="glass-button danger" type="button">Leave</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="nudgeBanner" class="nudge-banner" role="status" aria-live="assertive" hidden>
+    <strong>NUDGE</strong>
+    <span id="nudgeBannerMessage">It is your turn.</span>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

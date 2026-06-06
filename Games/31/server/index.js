@@ -6,6 +6,7 @@ const { WebSocket, WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_PLAYERS = 10;
+const NUDGE_COOLDOWN_MS = 10000;
 const SNAPSHOT_PATH = path.join(__dirname, "data", "state.json");
 const HEARTBEAT_MS = 30000;
 const SUITS = [
@@ -62,8 +63,8 @@ wss.on("connection", ws => {
       const playerId = ws.playerId;
       removeSocket(ws);
       if (!hasOpenSocket(playerId)) {
-        markDisconnected(playerId);
-        broadcast();
+        const player = markDisconnected(playerId);
+        broadcast(player ? `${player.name} disconnected. Their hand is saved for same-name rejoin.` : undefined);
       }
     }
   });
@@ -105,6 +106,7 @@ function handleMessage(ws, message) {
     if (type === "drawDiscard") return drawDiscard(player);
     if (type === "discard") return discardCard(player, data);
     if (type === "leaveSeat") return leaveSeat(player);
+    if (type === "nudge") return nudgePlayer(player);
 
     send(ws, "error", { message: "Unknown action." });
   } catch (error) {
@@ -128,6 +130,7 @@ function createRoom(ws, data) {
     pendingDiscardPlayerId: null,
     checkingPlayerId: null,
     finalTurnPlayerIds: [],
+    nudgeReadyAt: Date.now() + NUDGE_COOLDOWN_MS,
     finishReason: "",
     finishedAt: null,
     stock: [],
@@ -158,22 +161,38 @@ function joinRoom(ws, data) {
   if (code !== room.code) {
     throw new Error("Room code not found.");
   }
+  if (room.status !== "playing") {
+    pruneInactiveLobbyPlayers();
+  }
 
   const requestedId = normalizeId(data.playerId);
   const name = normalizeName(data.name);
+  const nameKey = name.toLowerCase();
   let player = requestedId ? room.players.find(p => p.id === requestedId) : null;
+  let matchedByName = false;
 
   if (!player) {
-    player = room.players.find(p => !p.connected && p.name.toLowerCase() === name.toLowerCase());
+    player = room.players.find(p => (
+      !p.connected &&
+      p.name.toLowerCase() === nameKey &&
+      (room.status !== "playing" || p.hand.length > 0)
+    )) || null;
+    matchedByName = Boolean(player);
   }
 
   if (room.status === "playing" && (!player || player.hand.length === 0)) {
-    throw new Error("This game already started. Wait for the host to reset before joining.");
+    throw new Error("This game already started. Rejoin with the exact same name and room code to reclaim your hand.");
   }
 
+  if (room.status === "playing" && player && player.hand.length && player.name.toLowerCase() !== nameKey) {
+    throw new Error("Use the same name you had when the hand started.");
+  }
+
+  const wasReconnect = Boolean(player && !player.connected);
+  let joinedNewPlayer = false;
   if (!player) {
-    if (room.players.some(p => p.connected && p.name.toLowerCase() === name.toLowerCase())) {
-      throw new Error("That name is already seated. Use your same device to rejoin or choose another name.");
+    if (room.players.some(p => p.connected && p.name.toLowerCase() === nameKey)) {
+      throw new Error("That name is already seated. Use that same name only after the player leaves or disconnects.");
     }
     if (room.players.length >= MAX_PLAYERS) {
       throw new Error("This room is full.");
@@ -188,6 +207,9 @@ function joinRoom(ws, data) {
       hand: []
     };
     room.players.push(player);
+    joinedNewPlayer = true;
+  } else if (matchedByName && requestedId && player.id !== requestedId) {
+    reassignPlayerId(player, requestedId);
   }
 
   player.name = name;
@@ -195,7 +217,11 @@ function joinRoom(ws, data) {
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
   saveSnapshot();
-  broadcast();
+  broadcast(wasReconnect
+    ? `${player.name} rejoined and got their saved hand back.`
+    : joinedNewPlayer
+      ? `${player.name} joined the room.`
+      : undefined);
 }
 
 function syncPlayer(ws, data) {
@@ -215,15 +241,24 @@ function syncPlayer(ws, data) {
     send(ws, "error", { message: "This game already started. Wait for the host to reset before joining." });
     return;
   }
+  const wasReconnect = !player.connected;
   player.connected = true;
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
   saveSnapshot();
-  broadcast();
+  broadcast(wasReconnect ? `${player.name} rejoined and got their saved hand back.` : undefined);
 }
 
 function startGame(player) {
   requireHost(player);
+  if (room.status === "finished") {
+    resetRoomToLobby("Game reset. Players can join before the host starts.");
+    return;
+  }
+  if (room.status === "playing") {
+    throw new Error("The game already started.");
+  }
+
   const deck = buildDeck();
   const activePlayers = connectedPlayersInSeatOrder();
   if (activePlayers.length < 2) {
@@ -250,12 +285,17 @@ function startGame(player) {
   // Randomize turn order
   const randomizedPlayers = shuffle(activePlayers.slice());
   room.currentTurnPlayerId = randomizedPlayers[0].id;
+  resetNudgeTimer();
   saveSnapshot();
   broadcast("Game started.");
 }
 
 function stopGame(player) {
   requireHost(player);
+  resetRoomToLobby("Game reset. Players can join before the host starts.");
+}
+
+function resetRoomToLobby(toastMessage) {
   for (const p of room.players) {
     p.hand = [];
   }
@@ -268,8 +308,10 @@ function stopGame(player) {
   room.finishedAt = null;
   room.stock = [];
   room.discard = [];
+  resetNudgeTimer();
+  pruneInactiveLobbyPlayers();
   saveSnapshot();
-  broadcast("Game reset.");
+  broadcast(toastMessage || "Game reset.");
 }
 
 function endSession(player) {
@@ -331,6 +373,7 @@ function checkRound(player) {
   }
 
   room.currentTurnPlayerId = room.finalTurnPlayerIds[0];
+  resetNudgeTimer();
   saveSnapshot();
   broadcast(`${player.name} checked. Everyone else gets one more turn.`);
 }
@@ -390,24 +433,127 @@ function discardCard(player, data) {
 }
 
 function leaveSeat(player) {
+  if (player.id === room.hostId) {
+    throw new Error("The host can use End Room instead of Leave.");
+  }
+
+  const playerName = player.name;
+  const wasPlaying = room.status === "playing";
+  const wasCurrent = room.currentTurnPlayerId === player.id;
+  const previousTurnPlayerId = room.currentTurnPlayerId;
+  const wasFinalTurnPlayer = (room.finalTurnPlayerIds || []).includes(player.id);
+  const next = wasCurrent ? nextPlayerAfter(player.id) : null;
+
+  detachPlayerSockets(player.id, "leftSeat", {
+    message: "You left the table. Rejoin with the same name and room code to reclaim your hand."
+  });
   player.connected = false;
   player.lastSeen = Date.now();
-  closePlayerSockets(player.id);
+  room.finalTurnPlayerIds = (room.finalTurnPlayerIds || []).filter(id => id !== player.id);
+  if (room.pendingDiscardPlayerId === player.id) {
+    if (player.hand.length > 3) {
+      room.discard.push(player.hand.pop());
+    }
+    room.pendingDiscardPlayerId = null;
+  }
+
+  if (wasPlaying) {
+    const activePlayers = activePlayersInSeatOrder();
+    if (activePlayers.length < 2) {
+      finishGame("leave", `${playerName} left and was removed. Not enough players remain.`);
+      return;
+    }
+    if (room.checkingPlayerId && wasFinalTurnPlayer && !room.finalTurnPlayerIds.length) {
+      finishGame("check", `${playerName} left and was removed. Final turns are complete.`);
+      return;
+    }
+    if (wasCurrent) {
+      if (room.checkingPlayerId && room.finalTurnPlayerIds.length) {
+        room.currentTurnPlayerId = room.finalTurnPlayerIds[0];
+      } else {
+        const nextStillActive = next && activePlayers.some(p => p.id === next.id) ? next : activePlayers[0];
+        room.currentTurnPlayerId = nextStillActive.id;
+      }
+    } else if (!activePlayers.some(p => p.id === room.currentTurnPlayerId)) {
+      room.currentTurnPlayerId = activePlayers[0].id;
+    }
+    if (room.currentTurnPlayerId !== previousTurnPlayerId) {
+      resetNudgeTimer();
+    }
+  }
+
+  saveSnapshot();
+  broadcast(wasCurrent
+    ? `${playerName} left the table. Their turn was skipped, and their hand is saved.`
+    : `${playerName} left the table. Their hand is saved for same-name rejoin.`);
+}
+
+function nudgePlayer(player) {
+  const target = currentNudgeTarget();
+  if (!target) {
+    throw new Error(room && room.status === "playing"
+      ? "There is no connected current player to nudge."
+      : "There is no connected host to nudge.");
+  }
+  if (target.id === player.id) {
+    throw new Error(room.status === "playing" ? "It is already your turn." : "You are the host.");
+  }
+
+  const now = Date.now();
+  const readyAt = Number(room.nudgeReadyAt) || (now + NUDGE_COOLDOWN_MS);
+  if (now < readyAt) {
+    const seconds = Math.ceil((readyAt - now) / 1000);
+    throw new Error(`Nudge is ready in ${seconds}s.`);
+  }
+
+  room.nudgeReadyAt = now + NUDGE_COOLDOWN_MS;
   saveSnapshot();
   broadcast();
+
+  const targetMessage = room.status === "playing"
+    ? `${player.name} nudged you. It is your turn.`
+    : `${player.name} nudged you to start the game.`;
+  const sent = sendNudgeAlertToPlayer(target.id, targetMessage);
+  sendToastToPlayer(player.id, sent ? `Nudge sent to ${target.name}.` : `${target.name} is not connected right now.`);
 }
 
 function markDisconnected(playerId) {
   if (!room) {
-    return;
+    return null;
   }
   const player = room.players.find(p => p.id === playerId);
-  if (!player) {
-    return;
+  if (!player || !player.connected) {
+    return null;
   }
   player.connected = false;
   player.lastSeen = Date.now();
   saveSnapshot();
+  return player;
+}
+
+function reassignPlayerId(player, nextId) {
+  if (!nextId || player.id === nextId) {
+    return;
+  }
+  if (room.players.some(p => p !== player && p.id === nextId)) {
+    throw new Error("That saved player id is already seated.");
+  }
+
+  const previousId = player.id;
+  player.id = nextId;
+  if (room.hostId === previousId) {
+    room.hostId = nextId;
+  }
+  if (room.currentTurnPlayerId === previousId) {
+    room.currentTurnPlayerId = nextId;
+  }
+  if (room.pendingDiscardPlayerId === previousId) {
+    room.pendingDiscardPlayerId = nextId;
+  }
+  if (room.checkingPlayerId === previousId) {
+    room.checkingPlayerId = nextId;
+  }
+  room.finalTurnPlayerIds = (room.finalTurnPlayerIds || []).map(id => id === previousId ? nextId : id);
 }
 
 function bindSocket(ws, playerId) {
@@ -448,14 +594,18 @@ function hasOpenSocket(playerId) {
   return false;
 }
 
-function closePlayerSockets(playerId) {
+function detachPlayerSockets(playerId, type, data) {
   const playerSockets = sockets.get(playerId);
   if (!playerSockets) {
     return;
   }
   for (const ws of playerSockets) {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.close(1000, "Seat left.");
+      if (type) {
+        send(ws, type, data);
+        ws.suppressNextToast = true;
+      }
+      ws.playerId = null;
     }
   }
   sockets.delete(playerId);
@@ -507,11 +657,13 @@ function advanceTurn() {
   const players = activePlayersInSeatOrder();
   if (!players.length) {
     room.currentTurnPlayerId = null;
+    resetNudgeTimer();
     return;
   }
   const currentIndex = players.findIndex(p => p.id === room.currentTurnPlayerId);
   const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % players.length;
   room.currentTurnPlayerId = players[nextIndex].id;
+  resetNudgeTimer();
 }
 
 function completeTurn(player) {
@@ -522,6 +674,7 @@ function completeTurn(player) {
       return true;
     }
     room.currentTurnPlayerId = room.finalTurnPlayerIds[0];
+    resetNudgeTimer();
     return false;
   }
   advanceTurn();
@@ -530,7 +683,7 @@ function completeTurn(player) {
 
 function activePlayersInSeatOrder() {
   return room.players
-    .filter(p => p.connected || p.hand.length)
+    .filter(p => p.connected)
     .sort((a, b) => a.seat - b.seat);
 }
 
@@ -557,6 +710,7 @@ function finishGame(reason, toastMessage) {
   room.currentTurnPlayerId = null;
   room.pendingDiscardPlayerId = null;
   room.finalTurnPlayerIds = [];
+  room.nudgeReadyAt = 0;
   room.finishReason = reason;
   room.finishedAt = Date.now();
   saveSnapshot();
@@ -584,6 +738,7 @@ function publicRoom() {
       pendingDiscardPlayerId: room.pendingDiscardPlayerId,
       checkingPlayerId: room.checkingPlayerId || null,
       finalTurnPlayerIds: room.finalTurnPlayerIds || [],
+      nudgeReadyAt: Number(room.nudgeReadyAt) || 0,
       finishReason: room.finishReason || "",
       finishedAt: room.finishedAt || null,
       connectedCount: counts.connectedCount,
@@ -611,7 +766,7 @@ function roomCounts(players = room ? room.players : []) {
   const counted = Array.isArray(players) ? players : [];
   return {
     connectedCount: counted.filter(p => p.connected).length,
-    activeCount: counted.filter(p => p.connected || p.hand.length || (room && p.id === room.hostId)).length,
+    activeCount: counted.filter(p => p.connected || (room && p.id === room.hostId)).length,
     seatedCount: counted.length
   };
 }
@@ -708,7 +863,11 @@ function broadcast(toastMessage) {
       }
     }
     if (toastMessage) {
-      send(ws, "toast", { message: toastMessage });
+      if (ws.suppressNextToast) {
+        ws.suppressNextToast = false;
+      } else {
+        send(ws, "toast", { message: toastMessage });
+      }
     }
   }
 }
@@ -716,6 +875,56 @@ function broadcast(toastMessage) {
 function send(ws, type, data) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type, data }));
+  }
+}
+
+function sendToastToPlayer(playerId, message) {
+  const playerSockets = sockets.get(playerId);
+  if (!playerSockets) {
+    return false;
+  }
+  let sent = false;
+  for (const ws of playerSockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      send(ws, "toast", { message });
+      sent = true;
+    }
+  }
+  return sent;
+}
+
+function sendNudgeAlertToPlayer(playerId, message) {
+  const playerSockets = sockets.get(playerId);
+  if (!playerSockets) {
+    return false;
+  }
+  let sent = false;
+  for (const ws of playerSockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      send(ws, "nudgeAlert", { message });
+      sent = true;
+    }
+  }
+  return sent;
+}
+
+function currentNudgeTarget() {
+  if (!room) {
+    return null;
+  }
+  if (room.status === "playing") {
+    const target = currentPlayer();
+    return target && target.connected ? target : null;
+  }
+  if (room.status === "lobby") {
+    return room.players.find(p => p.id === room.hostId && p.connected) || null;
+  }
+  return null;
+}
+
+function resetNudgeTimer() {
+  if (room) {
+    room.nudgeReadyAt = Date.now() + NUDGE_COOLDOWN_MS;
   }
 }
 
@@ -774,6 +983,13 @@ function nextPlayerAfter(playerId) {
   return players[(index + 1) % players.length];
 }
 
+function pruneInactiveLobbyPlayers() {
+  if (!room || room.status === "playing") {
+    return;
+  }
+  room.players = room.players.filter(p => p.connected || p.hand.length || p.id === room.hostId);
+}
+
 function nextSeat() {
   const used = new Set(room.players.map(p => p.seat));
   for (let seat = 0; seat < MAX_PLAYERS; seat++) {
@@ -821,6 +1037,7 @@ function loadSnapshot() {
     for (const player of parsed.players || []) {
       player.connected = false;
     }
+    parsed.nudgeReadyAt = Number(parsed.nudgeReadyAt) || (Date.now() + NUDGE_COOLDOWN_MS);
     return parsed;
   } catch (error) {
     console.error("Failed to load snapshot:", error);

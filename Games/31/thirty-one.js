@@ -6,6 +6,7 @@
     serverUrl: "thirtyOneServerUrl"
   };
   const MAX_PLAYERS = 10;
+  const NUDGE_COOLDOWN_MS = 10000;
   const RED_SUITS = new Set(["\u2665", "\u2666"]);
   const CARD_RENDER_OPTIONS = { assetBasePath: "../../assets/courts/white" };
 
@@ -29,10 +30,13 @@
     bestScore: document.getElementById("bestScore"),
     turnHint: document.getElementById("turnHint"),
     hostControls: document.getElementById("hostControls"),
+    nudgeControls: document.getElementById("nudgeControls"),
     startBtn: document.getElementById("startBtn"),
     skipBtn: document.getElementById("skipBtn"),
     stopBtn: document.getElementById("stopBtn"),
     endSessionBtn: document.getElementById("endSessionBtn"),
+    leaveSeatBtn: document.getElementById("leaveSeatBtn"),
+    nudgeBtn: document.getElementById("nudgeBtn"),
     sortBtn: document.getElementById("sortBtn"),
     checkBtn: document.getElementById("checkBtn"),
     handPrevBtn: document.getElementById("handPrevBtn"),
@@ -58,6 +62,11 @@
     resultsActions: document.getElementById("resultsActions"),
     playAgainBtn: document.getElementById("playAgainBtn"),
     endSessionResultsBtn: document.getElementById("endSessionResultsBtn"),
+    leaveConfirmPanel: document.getElementById("leaveConfirmPanel"),
+    cancelLeaveBtn: document.getElementById("cancelLeaveBtn"),
+    confirmLeaveBtn: document.getElementById("confirmLeaveBtn"),
+    nudgeBanner: document.getElementById("nudgeBanner"),
+    nudgeBannerMessage: document.getElementById("nudgeBannerMessage"),
     toast: document.getElementById("toast")
   };
 
@@ -75,12 +84,16 @@
   };
   let selectedCardId = "";
   let toastTimer = null;
+  let nudgeBannerTimer = null;
+  let nudgeShakeTimer = null;
   let autoJoinTimer = null;
   let autoJoinFallbackTimer = null;
   let autoJoinPending = false;
   let autoJoinBlocked = false;
   let joinAttemptPending = false;
   let joinedThisSession = false;
+  let leftRoomThisSession = false;
+  let nudgeTimer = null;
   let joinPanelRevealTimer = null;
   let handSpreadFrame = 0;
   let handOffset = 0;
@@ -104,8 +117,10 @@
       const name = readName();
       if (!name) return;
       autoJoinBlocked = false;
+      leftRoomThisSession = false;
       autoJoinPending = false;
       setStored(STORAGE.playerName, name);
+      setStored(STORAGE.playerId, playerId);
       joinAttemptPending = true;
       hideJoinPanel();
       send("createRoom", { playerId, name });
@@ -117,8 +132,10 @@
       const roomCode = readRoomCode();
       if (!name || !roomCode) return;
       autoJoinBlocked = false;
+      leftRoomThisSession = false;
       autoJoinPending = false;
       setStored(STORAGE.playerName, name);
+      setStored(STORAGE.playerId, playerId);
       setStored(STORAGE.roomCode, roomCode);
       joinAttemptPending = true;
       hideJoinPanel();
@@ -133,10 +150,12 @@
       if (canDraw()) send("drawDiscard");
     });
 
-    dom.startBtn.addEventListener("click", () => send("startGame"));
+    dom.startBtn.addEventListener("click", handleStartButton);
     dom.skipBtn.addEventListener("click", () => send("skipPlayer"));
     dom.stopBtn.addEventListener("click", () => send("stopGame"));
     dom.endSessionBtn.addEventListener("click", () => send("endSession"));
+    dom.leaveSeatBtn.addEventListener("click", openLeaveConfirm);
+    dom.nudgeBtn.addEventListener("click", requestNudge);
     dom.checkBtn.addEventListener("click", () => {
       if (canCheck()) send("check");
     });
@@ -179,8 +198,15 @@
     dom.closeResultsBtn.addEventListener("click", () => {
       dom.resultsPanel.hidden = true;
     });
-    dom.playAgainBtn.addEventListener("click", () => send("startGame"));
+    dom.playAgainBtn.addEventListener("click", resetToLobby);
     dom.endSessionResultsBtn.addEventListener("click", () => send("endSession"));
+    dom.cancelLeaveBtn.addEventListener("click", closeLeaveConfirm);
+    dom.confirmLeaveBtn.addEventListener("click", confirmLeaveSeat);
+    dom.leaveConfirmPanel.addEventListener("click", event => {
+      if (event.target === dom.leaveConfirmPanel) {
+        closeLeaveConfirm();
+      }
+    });
 
     window.addEventListener("resize", handleViewportChange);
     if (window.visualViewport) {
@@ -191,6 +217,18 @@
   function handleViewportChange() {
     updateStageMetrics();
     scheduleHandSpread();
+  }
+
+  function handleStartButton() {
+    if (roomState && roomState.status === "finished") {
+      resetToLobby();
+      return;
+    }
+    send("startGame");
+  }
+
+  function resetToLobby() {
+    send("stopGame");
   }
 
   function primeJoinPanel() {
@@ -252,8 +290,12 @@
       if (generation !== socketGeneration) return;
       reconnectAttempts = 0;
       setConnectionStatus("Connected");
-      send("sync", { playerId });
-      scheduleAutoJoin();
+      if (leftRoomThisSession) {
+        showJoinPanelNow();
+      } else {
+        send("sync", { playerId });
+        scheduleAutoJoin();
+      }
     });
 
     socket.addEventListener("message", event => {
@@ -291,7 +333,7 @@
     clearTimeout(autoJoinFallbackTimer);
     const savedName = getStored(STORAGE.playerName);
     const savedRoomCode = getStored(STORAGE.roomCode);
-    if (autoJoinBlocked || hasConfirmedSeat() || !savedName || !savedRoomCode) {
+    if (leftRoomThisSession || autoJoinBlocked || hasConfirmedSeat() || !savedName || !savedRoomCode) {
       autoJoinPending = false;
       return;
     }
@@ -367,6 +409,10 @@
   function handleServerMessage(message) {
     const data = message.data || {};
     if (message.type === "roomState") {
+      if (leftRoomThisSession) {
+        resetLeftRoomView();
+        return;
+      }
       roomState = data.room || null;
       if (!roomState) {
         privateState = {
@@ -383,7 +429,7 @@
           joinedThisSession = false;
           requestJoinPanel();
         }
-      } else if (roomState.players.some(player => player.id === playerId)) {
+      } else if (!leftRoomThisSession && roomState.players.some(player => player.id === playerId)) {
         joinedThisSession = true;
         autoJoinPending = false;
         joinAttemptPending = false;
@@ -405,6 +451,9 @@
     }
 
     if (message.type === "privateHand") {
+      if (leftRoomThisSession) {
+        return;
+      }
       privateState = {
         playerId: data.playerId || playerId,
         hand: Array.isArray(data.hand) ? data.hand : [],
@@ -433,12 +482,28 @@
       return;
     }
 
+    if (message.type === "nudgeAlert") {
+      showNudgeAlert(data.message || "You were nudged.");
+      return;
+    }
+
     if (message.type === "sessionEnded") {
       handleSessionEnded(data.message || "The room ended.");
       return;
     }
 
+    if (message.type === "leftSeat") {
+      handleSeatLeft(data.message || "You left the room.");
+      return;
+    }
+
     if (message.type === "error") {
+      if (leftRoomThisSession) {
+        leftRoomThisSession = false;
+        autoJoinBlocked = false;
+        dom.leaveSeatBtn.disabled = false;
+        dom.confirmLeaveBtn.disabled = false;
+      }
       if (joinAttemptPending) {
         clearTimeout(autoJoinTimer);
         clearTimeout(autoJoinFallbackTimer);
@@ -511,7 +576,7 @@
       const seat = document.createElement("div");
       const anchorClass = anchor ? ` opponent-${anchor}` : "";
       seat.className = `avatar-seat opponent-${seatIndex}${anchorClass}${!player.connected ? " inactive" : ""}${player.id === roomState.currentTurnPlayerId ? " current-turn" : ""}`;
-      seat.style.setProperty("--avatar-hue", String(((player.seat * 71) + 205) % 360));
+      seat.style.setProperty("--avatar-hue", String(playerAvatarHue(player.seat)));
 
       const avatar = document.createElement("div");
       avatar.className = "voxel-avatar";
@@ -587,7 +652,7 @@
       return [];
     }
     return roomState.players
-      .filter(player => player.connected || player.handCount > 0)
+      .filter(player => player.connected)
       .sort((a, b) => a.seat - b.seat);
   }
 
@@ -684,14 +749,24 @@
     const readyCount = readyPlayerCount();
     const best = privateState.best || { total: 0, suit: "" };
 
-    dom.hostControls.hidden = !isHost;
+    dom.hostControls.hidden = !self;
     dom.startBtn.textContent = isFinished ? "Play Again" : "Start";
-    dom.startBtn.hidden = isPlaying;
-    dom.skipBtn.hidden = !isPlaying;
+    dom.startBtn.hidden = !isHost || isPlaying;
+    dom.skipBtn.hidden = !isHost || !isPlaying;
+    dom.stopBtn.hidden = !isHost;
+    dom.endSessionBtn.hidden = !isHost;
+    dom.leaveSeatBtn.hidden = isHost;
+    const nudgeInfo = getNudgeInfo();
+    dom.nudgeControls.hidden = !nudgeInfo.visible;
     dom.startBtn.disabled = !roomState || isPlaying || readyCount < 2;
     dom.skipBtn.disabled = !isHost || !isPlaying;
     dom.stopBtn.disabled = !roomState;
     dom.endSessionBtn.disabled = !roomState;
+    dom.leaveSeatBtn.disabled = !roomState || !self;
+    dom.nudgeBtn.disabled = !nudgeInfo.ready;
+    dom.nudgeBtn.classList.toggle("nudge-ready", nudgeInfo.ready);
+    dom.nudgeBtn.title = nudgeInfo.title;
+    scheduleNudgeRefresh(nudgeInfo);
     const checkReady = canCheck();
     dom.checkBtn.hidden = !roomState || roomState.status !== "playing" || !self;
     dom.checkBtn.disabled = !checkReady;
@@ -739,6 +814,122 @@
     selectedCardId = "";
     pointerState = null;
     renderControls();
+  }
+
+  function requestNudge() {
+    const nudgeInfo = getNudgeInfo();
+    if (!nudgeInfo.visible) {
+      showToast("There is nobody to nudge right now.");
+      return;
+    }
+    if (!nudgeInfo.ready) {
+      showToast(`Nudge is ready in ${Math.ceil(nudgeInfo.remainingMs / 1000)}s.`);
+      return;
+    }
+    send("nudge");
+  }
+
+  function getNudgeInfo() {
+    if (!roomState || !getSelf()) {
+      return { visible: false, ready: false, remainingMs: 0, title: "" };
+    }
+
+    let targetId = "";
+    let targetName = "";
+    let title = "";
+    if (roomState.status === "playing") {
+      targetId = roomState.currentTurnPlayerId || "";
+      targetName = roomState.currentPlayerName || "the current player";
+      title = `Nudge ${targetName} to take their turn`;
+    } else if (roomState.status === "lobby") {
+      targetId = roomState.hostId || "";
+      const host = roomState.players.find(player => player.id === roomState.hostId);
+      targetName = host ? host.name : "the host";
+      title = `Nudge ${targetName} to start`;
+    } else {
+      return { visible: false, ready: false, remainingMs: 0, title: "" };
+    }
+
+    if (!targetId || targetId === playerId) {
+      return { visible: false, ready: false, remainingMs: 0, title: "" };
+    }
+
+    const readyAt = Number(roomState.nudgeReadyAt) || (Date.now() + NUDGE_COOLDOWN_MS);
+    const remainingMs = Math.max(0, readyAt - Date.now());
+    const ready = remainingMs <= 0;
+    return {
+      visible: true,
+      ready,
+      remainingMs,
+      readyAt,
+      title: ready ? title : `${title} in ${Math.ceil(remainingMs / 1000)}s`
+    };
+  }
+
+  function scheduleNudgeRefresh(nudgeInfo) {
+    clearTimeout(nudgeTimer);
+    nudgeTimer = null;
+    if (!nudgeInfo || !nudgeInfo.visible || nudgeInfo.ready) {
+      return;
+    }
+    const delay = Math.max(250, Math.min(nudgeInfo.remainingMs + 40, NUDGE_COOLDOWN_MS));
+    nudgeTimer = window.setTimeout(() => {
+      nudgeTimer = null;
+      renderControls();
+    }, delay);
+  }
+
+  function openLeaveConfirm() {
+    if (!roomState || !getSelf()) {
+      showToast("Join a room first.");
+      return;
+    }
+    dom.leaveConfirmPanel.hidden = false;
+    dom.cancelLeaveBtn.focus();
+  }
+
+  function closeLeaveConfirm() {
+    dom.leaveConfirmPanel.hidden = true;
+  }
+
+  function confirmLeaveSeat() {
+    closeLeaveConfirm();
+    autoJoinBlocked = true;
+    leftRoomThisSession = true;
+    joinedThisSession = false;
+    dom.leaveSeatBtn.disabled = true;
+    dom.confirmLeaveBtn.disabled = true;
+    if (!send("leaveSeat")) {
+      leftRoomThisSession = false;
+      autoJoinBlocked = false;
+      dom.leaveSeatBtn.disabled = false;
+      dom.confirmLeaveBtn.disabled = false;
+      return;
+    }
+    resetLeftRoomView();
+    showToast("Leaving room...");
+  }
+
+  function resetLeftRoomView() {
+    clearTimeout(autoJoinTimer);
+    clearTimeout(autoJoinFallbackTimer);
+    clearTimeout(joinPanelRevealTimer);
+    autoJoinPending = false;
+    joinAttemptPending = false;
+    joinedThisSession = false;
+    roomState = null;
+    privateState = {
+      playerId,
+      hand: [],
+      best: { total: 0, suit: "" },
+      mustDiscard: false,
+      isTurn: false
+    };
+    selectedCardId = "";
+    closeLeaveConfirm();
+    dom.confirmLeaveBtn.disabled = false;
+    render();
+    dom.joinPanel.hidden = false;
   }
 
   function sortHandForDisplay() {
@@ -807,12 +998,34 @@
       diff.textContent = `${row.difference}`;
       score.append(total, diff);
 
-      item.append(rank, identity, hand, score);
+      item.append(rank, identity, hand, score, renderResultAvatar(row));
       dom.resultsList.appendChild(item);
     });
 
     dom.resultsActions.style.display = isHost ? "flex" : "none";
     dom.resultsPanel.hidden = false;
+  }
+
+  function renderResultAvatar(row) {
+    const avatar = document.createElement("div");
+    avatar.className = `result-avatar ${row.isWinner ? "result-avatar--winner" : "result-avatar--loser"}`;
+    avatar.style.setProperty("--avatar-hue", String(playerAvatarHue(row.seat)));
+    avatar.setAttribute("aria-label", row.isWinner ? `${row.name} celebrating` : `${row.name} sad`);
+    avatar.innerHTML = `
+      <span class="result-avatar__crown"></span>
+      <span class="result-avatar__arm result-avatar__arm--left"></span>
+      <span class="result-avatar__arm result-avatar__arm--right"></span>
+      <span class="result-avatar__body"></span>
+      <span class="result-avatar__head">
+        <span class="result-avatar__eye result-avatar__eye--left"></span>
+        <span class="result-avatar__eye result-avatar__eye--right"></span>
+      </span>
+    `;
+    return avatar;
+  }
+
+  function playerAvatarHue(seat) {
+    return (((Number(seat) || 0) * 71) + 205) % 360;
   }
 
   function resultsReasonText() {
@@ -823,6 +1036,9 @@
     if (roomState.finishReason === "check") {
       const checker = roomState.players.find(player => player.id === roomState.checkingPlayerId);
       return `${checker ? checker.name : "A player"} checked. Everyone else took one final turn.`;
+    }
+    if (roomState.finishReason === "leave") {
+      return "A player left and not enough players remained.";
     }
     return "Final scores.";
   }
@@ -926,7 +1142,7 @@
 
     const counted = new Set();
     for (const player of roomState.players) {
-      if (player.connected || player.handCount > 0 || player.id === roomState.hostId || player.id === playerId) {
+      if (player.connected || player.id === roomState.hostId || player.id === playerId) {
         counted.add(player.id);
       }
     }
@@ -1257,6 +1473,20 @@
     }, 650);
   }
 
+  function handleSeatLeft(message) {
+    clearTimeout(autoJoinTimer);
+    clearTimeout(autoJoinFallbackTimer);
+    clearTimeout(joinPanelRevealTimer);
+    autoJoinPending = false;
+    autoJoinBlocked = true;
+    joinAttemptPending = false;
+    joinedThisSession = false;
+    clearSavedSeat();
+    dom.roomCodeInput.value = "";
+    resetLeftRoomView();
+    showToast(message);
+  }
+
   function showError(message) {
     dom.joinError.textContent = message;
     showToast(message);
@@ -1272,6 +1502,31 @@
     toastTimer = setTimeout(() => {
       dom.toast.classList.remove("show");
     }, 2600);
+  }
+
+  function showNudgeAlert(message) {
+    if (!message) {
+      return;
+    }
+    clearTimeout(nudgeBannerTimer);
+    clearTimeout(nudgeShakeTimer);
+    dom.nudgeBannerMessage.textContent = message;
+    dom.nudgeBanner.hidden = false;
+    dom.nudgeBanner.classList.remove("show");
+    dom.stage.classList.remove("nudge-impact");
+    void dom.nudgeBanner.offsetWidth;
+    void dom.stage.offsetWidth;
+    dom.nudgeBanner.classList.add("show");
+    dom.stage.classList.add("nudge-impact");
+    nudgeShakeTimer = window.setTimeout(() => {
+      dom.stage.classList.remove("nudge-impact");
+    }, 760);
+    nudgeBannerTimer = window.setTimeout(() => {
+      dom.nudgeBanner.classList.remove("show");
+      window.setTimeout(() => {
+        dom.nudgeBanner.hidden = true;
+      }, 240);
+    }, 3600);
   }
 
   function setConnectionStatus(text) {
@@ -1324,7 +1579,7 @@
     if (window.location.protocol === "file:" || frontendLocalHostnames.has(window.location.hostname)) {
       return "ws://192.168.0.32:8787/ws";
     }
-    return "wss://cardgames.duckdns.org/ws";
+    return "wss://raydencardgames.duckdns.org/ws";
   }
 
   function isLoopbackServerUrl(value) {
@@ -1384,6 +1639,20 @@
         .then(keys => Promise.all(keys.map(key => window.caches.delete(key))))
         .catch(() => {});
     }
+  }
+
+  function clearSavedSeat() {
+    removeStored(STORAGE.playerId);
+    removeStored(STORAGE.roomCode);
+  }
+
+  function removeStored(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Ignore storage failures in private browsing.
+    }
+    clearCookie(key);
   }
 
   function setStored(key, value) {

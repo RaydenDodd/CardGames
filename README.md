@@ -25,5 +25,5 @@ Games/31/?server=ws://192.168.0.32:8787/ws
 DuckDNS endpoint:
 
 ```text
-wss://cardgames.duckdns.org/ws
+wss://raydencardgames.duckdns.org/ws
 ```

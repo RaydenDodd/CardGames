@@ -20,12 +20,12 @@ The browser client connects to the Raspberry Pi server by LAN IP when opened fro
 
 ```text
 Games/31/?server=ws://192.168.0.32:8787/ws
-Games/31/?server=wss://cardgames.duckdns.org/ws
+Games/31/?server=wss://raydencardgames.duckdns.org/ws
 ```
 
 ## Raspberry Pi Deployment
 
-1. Register the DuckDNS subdomain `cardgames.duckdns.org`.
+1. Register the DuckDNS subdomain `raydencardgames.duckdns.org`.
 2. Forward router ports `80` and `443` to the Raspberry Pi.
 3. Install Node.js, npm, Caddy, and git on the Pi.
 4. Clone or pull this repo on the Pi.
@@ -55,8 +55,8 @@ sudo systemctl status thirty-one
 
 ## Public Endpoints
 
-- `GET https://cardgames.duckdns.org/health`
-- `WSS wss://cardgames.duckdns.org/ws`
+- `GET https://raydencardgames.duckdns.org/health`
+- `WSS wss://raydencardgames.duckdns.org/ws`
 
 ## State
 
