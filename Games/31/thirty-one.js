@@ -1543,7 +1543,7 @@
     clearTimeout(nudgeBannerTimer);
     clearTimeout(nudgeShakeTimer);
     triggerNudgeVibration();
-    dom.nudgeBannerMessage.textContent = message;
+    renderNudgeMessage(message);
     dom.nudgeBanner.hidden = false;
     dom.nudgeBanner.classList.remove("show");
     dom.stage.classList.remove("nudge-impact");
@@ -1560,6 +1560,28 @@
         dom.nudgeBanner.hidden = true;
       }, 240);
     }, 3600);
+  }
+
+  function renderNudgeMessage(message) {
+    const text = String(message || "");
+    const signatureMarker = "- Sent with love from ";
+    const signatureIndex = text.indexOf(signatureMarker);
+    dom.nudgeBannerMessage.innerHTML = "";
+    const main = document.createElement("span");
+    main.className = "nudge-banner-message__main";
+    const signature = document.createElement("span");
+    signature.className = "nudge-banner-message__signature";
+    if (signatureIndex >= 0) {
+      main.textContent = text.slice(0, signatureIndex).trim();
+      signature.textContent = text.slice(signatureIndex + 2).trim();
+    } else {
+      main.textContent = text;
+      signature.textContent = "";
+    }
+    dom.nudgeBannerMessage.append(main);
+    if (signature.textContent) {
+      dom.nudgeBannerMessage.append(signature);
+    }
   }
 
   function triggerNudgeVibration() {

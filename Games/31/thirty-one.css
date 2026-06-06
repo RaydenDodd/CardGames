@@ -1028,10 +1028,26 @@
   background:#ffe8a3;
 }
 
-.nudge-banner span {
+.nudge-banner > span {
+  display:grid;
+  gap:4px;
   font-size:clamp(18px, 2.6vw, 28px);
   font-weight:950;
   line-height:1.1;
+}
+
+.nudge-banner-message__main {
+  display:block;
+}
+
+.nudge-banner-message__signature {
+  display:block;
+  font-family:Georgia, "Times New Roman", serif;
+  font-size:clamp(12px, 1.55vw, 16px);
+  font-style:italic;
+  font-weight:700;
+  line-height:1.2;
+  color:rgba(255,247,208,.82);
 }
 
 @media (max-width: 980px) {
