@@ -213,11 +213,20 @@
       window.visualViewport.addEventListener("resize", handleViewportChange);
     }
     dom.handScroller.addEventListener("scroll", applyHandOffset, { passive: true });
+    document.addEventListener("pointerdown", handleDocumentPointerDown, true);
   }
 
   function handleViewportChange() {
     updateStageMetrics();
     scheduleHandSpread();
+  }
+
+  function handleDocumentPointerDown(event) {
+    if (!selectedCardId || pointerState || event.target.closest(".hand-area")) {
+      return;
+    }
+    selectedCardId = "";
+    renderHand();
   }
 
   function handleStartButton() {
