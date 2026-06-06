@@ -3294,6 +3294,18 @@ html {
     gap:9px;
     padding:9px;
     border-radius:24px;
+    transform:none;
+  }
+
+  .host-controls {
+    right:max(10px, env(safe-area-inset-right));
+    max-width:calc(100vw - 20px);
+    transform-origin:top right;
+  }
+
+  .nudge-controls {
+    left:max(10px, env(safe-area-inset-left));
+    transform-origin:top left;
   }
 
   .host-controls .glass-button,
@@ -3311,9 +3323,19 @@ html {
 
   .utility-button {
     bottom:max(6px, calc(env(safe-area-inset-bottom) - 18px));
-    min-width:118px;
-    min-height:50px;
-    font-size:14px;
+    min-width:128px;
+    min-height:54px;
+    font-size:15px;
+  }
+
+  #sortBtn,
+  #checkBtn {
+    transform:none;
+  }
+
+  #checkBtn:hover,
+  #checkBtn:focus-visible {
+    transform:translateY(-1px);
   }
 
   .turn-hint {
