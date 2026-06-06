@@ -2347,6 +2347,11 @@
     top:40%;
   }
 
+  .avatar-seat.opponent-0,
+  .avatar-seat.opponent-top {
+    top:3%;
+  }
+
   .hand-track.hand-track--overflowing,
   .hand-track.hand-track--edge-fill {
     padding-left:max(2px, env(safe-area-inset-left));
