@@ -261,7 +261,7 @@
     const hudScale = clampNumber(0.34, 1, Math.min((width - 28) / 850, height / 520));
     const utilityScale = clampNumber(0.58, 1, Math.min(width / 760, height / 620));
     const handBottom = isSlim
-      ? clampNumber(58, 94, height * 0.044)
+      ? clampNumber(28, 46, height * 0.024)
       : clampNumber(12, 38, height * 0.022);
     const targetHandTop = Math.min(height - 220, tableBottom + (isSlim ? 8 : 24));
     const availableHandHeight = Math.max(180, height - handBottom - targetHandTop);

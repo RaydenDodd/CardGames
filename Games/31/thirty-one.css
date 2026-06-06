@@ -3163,3 +3163,20 @@
     0 0 26px rgba(90,220,184,.26),
     inset 0 1px 0 rgba(255,255,255,.12);
 }
+
+@media (max-width: 700px) {
+  .room-code-card,
+  .turn-card,
+  .score-card {
+    top:calc(env(safe-area-inset-top) + 42px);
+  }
+
+  .host-controls,
+  .nudge-controls {
+    top:calc(env(safe-area-inset-top) + 42px + var(--host-offset));
+  }
+
+  .hand-area {
+    bottom:var(--hand-bottom, 34px);
+  }
+}
