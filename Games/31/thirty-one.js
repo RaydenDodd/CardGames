@@ -212,7 +212,6 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewportChange);
     }
-    dom.handScroller.addEventListener("scroll", applyHandOffset, { passive: true });
     document.addEventListener("pointerdown", handleDocumentPointerDown, true);
   }
 
@@ -254,7 +253,6 @@
     const aspect = width / height;
     const isSlim = aspect < 0.78;
     const isCompact = width <= 860 || aspect < 0.96;
-    const isMobile = width <= 700;
     const tableBounds = dom.feltTable ? dom.feltTable.getBoundingClientRect() : null;
     const tableBottom = tableBounds && tableBounds.height > 0
       ? tableBounds.bottom
@@ -262,9 +260,7 @@
 
     const hudScale = clampNumber(0.34, 1, Math.min((width - 28) / 850, height / 520));
     const utilityScale = clampNumber(0.58, 1, Math.min(width / 760, height / 620));
-    const handBottom = isMobile
-      ? clampNumber(54, 76, height * 0.072)
-      : isSlim
+    const handBottom = isSlim
       ? clampNumber(58, 94, height * 0.044)
       : clampNumber(12, 38, height * 0.022);
     const targetHandTop = Math.min(height - 220, tableBottom + (isSlim ? 8 : 24));
@@ -277,8 +273,7 @@
     const compactSize = clampNumber(0.82, compactMax, Math.min(heightFit * 1.02, width / 430));
     const wideBase = Math.min(width / 980, height / 760) * 0.72;
     const wideSize = clampNumber(0.42, 0.70, Math.min(wideBase, heightFit * 0.96));
-    const mobileSize = clampNumber(0.38, 0.52, Math.min(width / 820, height / 1650));
-    const handSize = isMobile ? mobileSize : (isSlim ? slimSize : (isCompact ? compactSize : wideSize));
+    const handSize = isSlim ? slimSize : (isCompact ? compactSize : wideSize);
 
     dom.stage.style.setProperty("--hud-scale", hudScale.toFixed(3));
     dom.stage.style.setProperty("--host-offset", `${Math.round(126 * hudScale)}px`);
@@ -732,7 +727,7 @@
           moved: false
         };
         bindActivePointerListeners();
-        if (!usesNativeHandScroll() && typeof cardButton.setPointerCapture === "function") {
+        if (typeof cardButton.setPointerCapture === "function") {
           try {
             cardButton.setPointerCapture(event.pointerId);
           } catch {
@@ -1062,11 +1057,6 @@
   }
 
   function scrollHand(direction) {
-    if (usesNativeHandScroll()) {
-      const distance = Math.max(150, dom.handScroller.clientWidth * 0.72);
-      dom.handScroller.scrollBy({ left: distance * direction, behavior: "smooth" });
-      return;
-    }
     const distance = Math.max(150, dom.handArea.clientWidth * 0.34);
     handOffset = clampNumber(0, handMaxOffset, handOffset + distance * direction);
     applyHandOffset();
@@ -1089,16 +1079,6 @@
       dom.handTrack.classList.remove("hand-track--overflowing", "hand-track--edge-fill");
       handOffset = 0;
       handMaxOffset = 0;
-      applyHandOffset();
-      return;
-    }
-
-    if (usesNativeHandScroll()) {
-      dom.handTrack.style.setProperty("--hand-overlap", "0px");
-      dom.handTrack.style.removeProperty("--hand-spread-width");
-      dom.handTrack.classList.add("hand-track--overflowing", "hand-track--edge-fill");
-      handOffset = 0;
-      handMaxOffset = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
       applyHandOffset();
       return;
     }
@@ -1127,20 +1107,9 @@
   }
 
   function applyHandOffset() {
-    if (usesNativeHandScroll()) {
-      dom.handTrack.style.setProperty("--hand-shift", "0px");
-      const maxScroll = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
-      dom.handPrevBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft <= 1;
-      dom.handNextBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft >= maxScroll - 1;
-      return;
-    }
     dom.handTrack.style.setProperty("--hand-shift", `${Math.round(-handOffset)}px`);
     dom.handPrevBtn.disabled = handMaxOffset <= 0 || handOffset <= 1;
     dom.handNextBtn.disabled = handMaxOffset <= 0 || handOffset >= handMaxOffset - 1;
-  }
-
-  function usesNativeHandScroll() {
-    return Boolean(window.matchMedia && window.matchMedia("(max-width: 700px)").matches);
   }
 
   function copyText(text) {
@@ -1597,7 +1566,7 @@
   }
 
   function triggerNudgeVibration() {
-    if (!usesNativeHandScroll() || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
+    if (!isMobileViewport() || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
       return;
     }
     try {
@@ -1605,6 +1574,10 @@
     } catch {
       // Some browsers expose vibrate but block it; the visual nudge still runs.
     }
+  }
+
+  function isMobileViewport() {
+    return Boolean(window.matchMedia && window.matchMedia("(max-width: 700px)").matches);
   }
 
   function setConnectionStatus(text) {
