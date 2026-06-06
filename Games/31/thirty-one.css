@@ -2357,7 +2357,7 @@
 @media (max-width: 700px) and (pointer: coarse) {
   .avatar-seat.opponent-0,
   .avatar-seat.opponent-top {
-    top:3%;
+    top:1%;
   }
 
   .table-scene,
