@@ -258,10 +258,7 @@
       ? tableBounds.bottom
       : height * (isSlim ? 0.47 : 0.58);
 
-    let hudScale = clampNumber(0.34, 1, Math.min((width - 28) / 850, height / 520));
-    if (isSlim && width <= 700) {
-      hudScale = clampNumber(0.42, 0.54, hudScale * 1.08);
-    }
+    const hudScale = clampNumber(0.34, 1, Math.min((width - 28) / 850, height / 520));
     const utilityScale = clampNumber(0.58, 1, Math.min(width / 760, height / 620));
     const handBottom = isSlim
       ? clampNumber(58, 94, height * 0.044)
