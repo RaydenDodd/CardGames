@@ -3269,6 +3269,11 @@ html {
       linear-gradient(180deg, #071018 0%, #05080d 54%, #030509 100%);
   }
 
+  .avatar-seat.opponent-0,
+  .avatar-seat.opponent-top {
+    top:-4%;
+  }
+
   .room-code-row {
     gap:8px;
   }
