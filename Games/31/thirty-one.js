@@ -212,6 +212,7 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewportChange);
     }
+    dom.handScroller.addEventListener("scroll", applyHandOffset, { passive: true });
   }
 
   function handleViewportChange() {
@@ -244,6 +245,7 @@
     const aspect = width / height;
     const isSlim = aspect < 0.78;
     const isCompact = width <= 860 || aspect < 0.96;
+    const isMobile = width <= 700;
     const tableBounds = dom.feltTable ? dom.feltTable.getBoundingClientRect() : null;
     const tableBottom = tableBounds && tableBounds.height > 0
       ? tableBounds.bottom
@@ -251,7 +253,9 @@
 
     const hudScale = clampNumber(0.34, 1, Math.min((width - 28) / 850, height / 520));
     const utilityScale = clampNumber(0.58, 1, Math.min(width / 760, height / 620));
-    const handBottom = isSlim
+    const handBottom = isMobile
+      ? clampNumber(54, 76, height * 0.072)
+      : isSlim
       ? clampNumber(58, 94, height * 0.044)
       : clampNumber(12, 38, height * 0.022);
     const targetHandTop = Math.min(height - 220, tableBottom + (isSlim ? 8 : 24));
@@ -264,7 +268,8 @@
     const compactSize = clampNumber(0.82, compactMax, Math.min(heightFit * 1.02, width / 430));
     const wideBase = Math.min(width / 980, height / 760) * 0.72;
     const wideSize = clampNumber(0.42, 0.70, Math.min(wideBase, heightFit * 0.96));
-    const handSize = isSlim ? slimSize : (isCompact ? compactSize : wideSize);
+    const mobileSize = clampNumber(0.38, 0.52, Math.min(width / 820, height / 1650));
+    const handSize = isMobile ? mobileSize : (isSlim ? slimSize : (isCompact ? compactSize : wideSize));
 
     dom.stage.style.setProperty("--hud-scale", hudScale.toFixed(3));
     dom.stage.style.setProperty("--host-offset", `${Math.round(126 * hudScale)}px`);
@@ -483,7 +488,7 @@
     }
 
     if (message.type === "nudgeAlert") {
-      showNudgeAlert(data.message || "You were nudged.");
+      showNudgeAlert(data.message || "GO IT IS YOUR TURN!!- Sent with love from Player");
       return;
     }
 
@@ -718,7 +723,7 @@
           moved: false
         };
         bindActivePointerListeners();
-        if (typeof cardButton.setPointerCapture === "function") {
+        if (!usesNativeHandScroll() && typeof cardButton.setPointerCapture === "function") {
           try {
             cardButton.setPointerCapture(event.pointerId);
           } catch {
@@ -894,6 +899,7 @@
 
   function confirmLeaveSeat() {
     closeLeaveConfirm();
+    rememberCurrentJoinDetails();
     autoJoinBlocked = true;
     leftRoomThisSession = true;
     joinedThisSession = false;
@@ -1044,6 +1050,11 @@
   }
 
   function scrollHand(direction) {
+    if (usesNativeHandScroll()) {
+      const distance = Math.max(150, dom.handScroller.clientWidth * 0.72);
+      dom.handScroller.scrollBy({ left: distance * direction, behavior: "smooth" });
+      return;
+    }
     const distance = Math.max(150, dom.handArea.clientWidth * 0.34);
     handOffset = clampNumber(0, handMaxOffset, handOffset + distance * direction);
     applyHandOffset();
@@ -1066,6 +1077,16 @@
       dom.handTrack.classList.remove("hand-track--overflowing", "hand-track--edge-fill");
       handOffset = 0;
       handMaxOffset = 0;
+      applyHandOffset();
+      return;
+    }
+
+    if (usesNativeHandScroll()) {
+      dom.handTrack.style.setProperty("--hand-overlap", "0px");
+      dom.handTrack.style.removeProperty("--hand-spread-width");
+      dom.handTrack.classList.add("hand-track--overflowing", "hand-track--edge-fill");
+      handOffset = 0;
+      handMaxOffset = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
       applyHandOffset();
       return;
     }
@@ -1094,9 +1115,20 @@
   }
 
   function applyHandOffset() {
+    if (usesNativeHandScroll()) {
+      dom.handTrack.style.setProperty("--hand-shift", "0px");
+      const maxScroll = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
+      dom.handPrevBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft <= 1;
+      dom.handNextBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft >= maxScroll - 1;
+      return;
+    }
     dom.handTrack.style.setProperty("--hand-shift", `${Math.round(-handOffset)}px`);
     dom.handPrevBtn.disabled = handMaxOffset <= 0 || handOffset <= 1;
     dom.handNextBtn.disabled = handMaxOffset <= 0 || handOffset >= handMaxOffset - 1;
+  }
+
+  function usesNativeHandScroll() {
+    return Boolean(window.matchMedia && window.matchMedia("(max-width: 700px)").matches);
   }
 
   function copyText(text) {
@@ -1477,12 +1509,12 @@
     clearTimeout(autoJoinTimer);
     clearTimeout(autoJoinFallbackTimer);
     clearTimeout(joinPanelRevealTimer);
+    rememberCurrentJoinDetails();
     autoJoinPending = false;
     autoJoinBlocked = true;
     joinAttemptPending = false;
     joinedThisSession = false;
     clearSavedSeat();
-    dom.roomCodeInput.value = "";
     resetLeftRoomView();
     showToast(message);
   }
@@ -1510,6 +1542,7 @@
     }
     clearTimeout(nudgeBannerTimer);
     clearTimeout(nudgeShakeTimer);
+    triggerNudgeVibration();
     dom.nudgeBannerMessage.textContent = message;
     dom.nudgeBanner.hidden = false;
     dom.nudgeBanner.classList.remove("show");
@@ -1527,6 +1560,17 @@
         dom.nudgeBanner.hidden = true;
       }, 240);
     }, 3600);
+  }
+
+  function triggerNudgeVibration() {
+    if (!usesNativeHandScroll() || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
+      return;
+    }
+    try {
+      navigator.vibrate([160, 70, 160, 70, 240]);
+    } catch {
+      // Some browsers expose vibrate but block it; the visual nudge still runs.
+    }
   }
 
   function setConnectionStatus(text) {
@@ -1561,6 +1605,20 @@
     dom.roomCodeInput.addEventListener("input", () => {
       dom.roomCodeInput.value = dom.roomCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
     });
+  }
+
+  function rememberCurrentJoinDetails() {
+    const self = getSelf();
+    const name = self && self.name ? self.name : dom.playerNameInput.value.trim();
+    const roomCode = roomState && roomState.code ? roomState.code : dom.roomCodeInput.value.trim().toUpperCase();
+    if (name) {
+      setStored(STORAGE.playerName, name);
+      dom.playerNameInput.value = name;
+    }
+    if (roomCode) {
+      setStored(STORAGE.roomCode, roomCode);
+      dom.roomCodeInput.value = roomCode;
+    }
   }
 
   function resolveServerUrl() {
@@ -1643,7 +1701,6 @@
 
   function clearSavedSeat() {
     removeStored(STORAGE.playerId);
-    removeStored(STORAGE.roomCode);
   }
 
   function removeStored(key) {

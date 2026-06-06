@@ -64,7 +64,7 @@ wss.on("connection", ws => {
       removeSocket(ws);
       if (!hasOpenSocket(playerId)) {
         const player = markDisconnected(playerId);
-        broadcast(player ? `${player.name} disconnected. Their hand is saved for same-name rejoin.` : undefined);
+        broadcast(player ? `${player.name} disconnected.` : undefined);
       }
     }
   });
@@ -218,7 +218,7 @@ function joinRoom(ws, data) {
   bindSocket(ws, player.id);
   saveSnapshot();
   broadcast(wasReconnect
-    ? `${player.name} rejoined and got their saved hand back.`
+    ? `${player.name} rejoined.`
     : joinedNewPlayer
       ? `${player.name} joined the room.`
       : undefined);
@@ -246,7 +246,7 @@ function syncPlayer(ws, data) {
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
   saveSnapshot();
-  broadcast(wasReconnect ? `${player.name} rejoined and got their saved hand back.` : undefined);
+  broadcast(wasReconnect ? `${player.name} rejoined.` : undefined);
 }
 
 function startGame(player) {
@@ -460,11 +460,11 @@ function leaveSeat(player) {
   if (wasPlaying) {
     const activePlayers = activePlayersInSeatOrder();
     if (activePlayers.length < 2) {
-      finishGame("leave", `${playerName} left and was removed. Not enough players remain.`);
+      finishGame("leave", `${playerName} left. Not enough players remain.`);
       return;
     }
     if (room.checkingPlayerId && wasFinalTurnPlayer && !room.finalTurnPlayerIds.length) {
-      finishGame("check", `${playerName} left and was removed. Final turns are complete.`);
+      finishGame("check", `${playerName} left. Final turns are complete.`);
       return;
     }
     if (wasCurrent) {
@@ -483,9 +483,7 @@ function leaveSeat(player) {
   }
 
   saveSnapshot();
-  broadcast(wasCurrent
-    ? `${playerName} left the table. Their turn was skipped, and their hand is saved.`
-    : `${playerName} left the table. Their hand is saved for same-name rejoin.`);
+  broadcast(`${playerName} left the table.`);
 }
 
 function nudgePlayer(player) {
@@ -510,9 +508,7 @@ function nudgePlayer(player) {
   saveSnapshot();
   broadcast();
 
-  const targetMessage = room.status === "playing"
-    ? `${player.name} nudged you. It is your turn.`
-    : `${player.name} nudged you to start the game.`;
+  const targetMessage = `GO IT IS YOUR TURN!!- Sent with love from ${player.name}`;
   const sent = sendNudgeAlertToPlayer(target.id, targetMessage);
   sendToastToPlayer(player.id, sent ? `Nudge sent to ${target.name}.` : `${target.name} is not connected right now.`);
 }
