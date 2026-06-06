@@ -3291,41 +3291,30 @@ html {
 
   .host-controls,
   .nudge-controls {
-    gap:9px;
-    padding:9px;
-    border-radius:24px;
+    gap:7px;
+    padding:7px;
+    border-radius:20px;
     transform:none;
-  }
-
-  .host-controls {
-    right:max(10px, env(safe-area-inset-right));
-    max-width:calc(100vw - 20px);
-    transform-origin:top right;
-  }
-
-  .nudge-controls {
-    left:max(10px, env(safe-area-inset-left));
-    transform-origin:top left;
   }
 
   .host-controls .glass-button,
   .nudge-controls .glass-button {
-    min-width:76px;
-    min-height:44px;
-    padding:10px 14px;
-    border-radius:16px;
-    font-size:14px;
+    min-width:68px;
+    min-height:40px;
+    padding:8px 11px;
+    border-radius:14px;
+    font-size:13px;
   }
 
   .nudge-controls .glass-button {
-    min-width:92px;
+    min-width:82px;
   }
 
   .utility-button {
     bottom:max(6px, calc(env(safe-area-inset-bottom) - 18px));
-    min-width:128px;
-    min-height:54px;
-    font-size:15px;
+    min-width:108px;
+    min-height:46px;
+    font-size:13px;
   }
 
   #sortBtn,
