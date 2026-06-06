@@ -2533,7 +2533,44 @@
 
 @media (max-width: 700px) {
   .hand-scroller {
+    overflow-x:auto;
+    overflow-y:visible;
     padding-top:calc((245px * var(--hand-card-size) * .08) + 10px);
+    pointer-events:auto;
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    touch-action:pan-x;
+  }
+
+  .hand-scroller::-webkit-scrollbar {
+    display:none;
+  }
+
+  .hand-track,
+  .hand-track.hand-track--overflowing,
+  .hand-track.hand-track--edge-fill {
+    width:max-content;
+    min-width:100%;
+    justify-content:flex-start;
+    gap:10px;
+    padding-left:max(34px, env(safe-area-inset-left));
+    padding-right:max(34px, env(safe-area-inset-right));
+    overflow:visible;
+    transform:none !important;
+    transition:none;
+  }
+
+  .hand-card,
+  .hand-card + .hand-card {
+    flex:0 0 auto;
+    margin-left:0;
+    scroll-snap-align:center;
+    touch-action:pan-x;
+  }
+
+  .carousel-arrow {
+    display:none;
   }
 }
 
