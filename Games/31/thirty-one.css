@@ -2553,6 +2553,42 @@
   }
 }
 
+@media (max-width: 700px) and (pointer: coarse) {
+  .hand-scroller {
+    overflow-x:auto;
+    overflow-y:visible;
+    pointer-events:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    touch-action:pan-x;
+  }
+
+  .hand-scroller::-webkit-scrollbar {
+    display:none;
+  }
+
+  .hand-track,
+  .hand-track.hand-track--overflowing,
+  .hand-track.hand-track--edge-fill {
+    justify-content:flex-start;
+    transform:none !important;
+    transition:none;
+  }
+
+  .hand-card {
+    touch-action:pan-x;
+  }
+
+  .hand-card.can-discard,
+  .hand-card.dragging {
+    touch-action:none;
+  }
+
+  .carousel-arrow {
+    display:none;
+  }
+}
+
 /* Physical pile stacking: lower layers recede left/down while the readable top card stays fixed. */
 .stock-pile .pile-card,
 .discard-pile .pile-card {

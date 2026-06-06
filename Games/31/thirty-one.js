@@ -727,7 +727,7 @@
           moved: false
         };
         bindActivePointerListeners();
-        if (typeof cardButton.setPointerCapture === "function") {
+        if (!isMobileViewport() && typeof cardButton.setPointerCapture === "function") {
           try {
             cardButton.setPointerCapture(event.pointerId);
           } catch {
@@ -1057,6 +1057,12 @@
   }
 
   function scrollHand(direction) {
+    if (isMobileViewport()) {
+      const distance = Math.max(150, dom.handScroller.clientWidth * 0.72);
+      dom.handScroller.scrollBy({ left: distance * direction, behavior: "smooth" });
+      return;
+    }
+
     const distance = Math.max(150, dom.handArea.clientWidth * 0.34);
     handOffset = clampNumber(0, handMaxOffset, handOffset + distance * direction);
     applyHandOffset();
@@ -1102,11 +1108,19 @@
     dom.handTrack.classList.toggle("hand-track--overflowing", isOverflowing);
     dom.handTrack.classList.toggle("hand-track--edge-fill", fillsEdges);
     handMaxOffset = isOverflowing ? Math.max(0, spreadWidth - available + 16) : 0;
-    handOffset = clampNumber(0, handMaxOffset, handOffset);
+    handOffset = isMobileViewport() ? 0 : clampNumber(0, handMaxOffset, handOffset);
     applyHandOffset();
   }
 
   function applyHandOffset() {
+    if (isMobileViewport()) {
+      dom.handTrack.style.setProperty("--hand-shift", "0px");
+      const maxScroll = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
+      dom.handPrevBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft <= 1;
+      dom.handNextBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft >= maxScroll - 1;
+      return;
+    }
+
     dom.handTrack.style.setProperty("--hand-shift", `${Math.round(-handOffset)}px`);
     dom.handPrevBtn.disabled = handMaxOffset <= 0 || handOffset <= 1;
     dom.handNextBtn.disabled = handMaxOffset <= 0 || handOffset >= handMaxOffset - 1;
