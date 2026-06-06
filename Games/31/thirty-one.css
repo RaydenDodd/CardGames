@@ -3165,21 +3165,6 @@
 }
 
 @media (max-width: 700px) {
-  .room-code-card,
-  .turn-card,
-  .score-card {
-    top:calc(env(safe-area-inset-top) + 42px);
-  }
-
-  .host-controls,
-  .nudge-controls {
-    top:calc(env(safe-area-inset-top) + 42px + var(--host-offset));
-  }
-
-  .hand-area {
-    bottom:var(--hand-bottom, 34px);
-  }
-
   .table-scene,
   .table-zone,
   .avatar-ring {
