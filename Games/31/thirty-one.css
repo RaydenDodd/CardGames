@@ -3223,7 +3223,11 @@
 
 /* iPhone Safari safe-area polish. */
 html {
-  background:#030509;
+  background:
+    radial-gradient(900px 520px at 50% -10%, rgba(66,123,173,.30), transparent 68%),
+    radial-gradient(760px 520px at 5% 18%, rgba(33,72,115,.26), transparent 70%),
+    radial-gradient(860px 620px at 92% 20%, rgba(42,31,61,.32), transparent 72%),
+    linear-gradient(180deg, #071018 0%, #05080d 54%, #030509 100%);
 }
 
 .thirty-one-page {
@@ -3250,7 +3254,11 @@ html {
     width:100%;
     min-height:100svh;
     min-height:100dvh;
-    background:#030509;
+    background:
+      radial-gradient(900px 520px at 50% -10%, rgba(66,123,173,.30), transparent 68%),
+      radial-gradient(760px 520px at 5% 18%, rgba(33,72,115,.26), transparent 70%),
+      radial-gradient(860px 620px at 92% 20%, rgba(42,31,61,.32), transparent 72%),
+      linear-gradient(180deg, #071018 0%, #05080d 54%, #030509 100%);
   }
 
   .game-stage {
