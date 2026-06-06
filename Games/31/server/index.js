@@ -127,6 +127,7 @@ function createRoom(ws, data) {
     status: "lobby",
     hostId: playerId,
     currentTurnPlayerId: null,
+    turnOrderPlayerIds: [],
     pendingDiscardPlayerId: null,
     checkingPlayerId: null,
     finalTurnPlayerIds: [],
@@ -282,8 +283,8 @@ function startGame(player) {
   room.finalTurnPlayerIds = [];
   room.finishReason = "";
   room.finishedAt = null;
-  // Randomize turn order
   const randomizedPlayers = shuffle(activePlayers.slice());
+  room.turnOrderPlayerIds = randomizedPlayers.map(p => p.id);
   room.currentTurnPlayerId = randomizedPlayers[0].id;
   resetNudgeTimer();
   saveSnapshot();
@@ -301,6 +302,7 @@ function resetRoomToLobby(toastMessage) {
   }
   room.status = "lobby";
   room.currentTurnPlayerId = null;
+  room.turnOrderPlayerIds = [];
   room.pendingDiscardPlayerId = null;
   room.checkingPlayerId = null;
   room.finalTurnPlayerIds = [];
@@ -449,6 +451,7 @@ function leaveSeat(player) {
   });
   player.connected = false;
   player.lastSeen = Date.now();
+  room.turnOrderPlayerIds = (room.turnOrderPlayerIds || []).filter(id => id !== player.id);
   room.finalTurnPlayerIds = (room.finalTurnPlayerIds || []).filter(id => id !== player.id);
   if (room.pendingDiscardPlayerId === player.id) {
     if (player.hand.length > 3) {
@@ -458,7 +461,7 @@ function leaveSeat(player) {
   }
 
   if (wasPlaying) {
-    const activePlayers = activePlayersInSeatOrder();
+    const activePlayers = activePlayersInTurnOrder();
     if (activePlayers.length < 2) {
       finishGame("leave", `${playerName} left. Not enough players remain.`);
       return;
@@ -549,6 +552,7 @@ function reassignPlayerId(player, nextId) {
   if (room.checkingPlayerId === previousId) {
     room.checkingPlayerId = nextId;
   }
+  room.turnOrderPlayerIds = (room.turnOrderPlayerIds || []).map(id => id === previousId ? nextId : id);
   room.finalTurnPlayerIds = (room.finalTurnPlayerIds || []).map(id => id === previousId ? nextId : id);
 }
 
@@ -650,7 +654,7 @@ function currentPlayer() {
 }
 
 function advanceTurn() {
-  const players = activePlayersInSeatOrder();
+  const players = activePlayersInTurnOrder();
   if (!players.length) {
     room.currentTurnPlayerId = null;
     resetNudgeTimer();
@@ -683,6 +687,20 @@ function activePlayersInSeatOrder() {
     .sort((a, b) => a.seat - b.seat);
 }
 
+function activePlayersInTurnOrder() {
+  const active = room.players.filter(p => p.connected);
+  const byId = new Map(active.map(p => [p.id, p]));
+  const order = Array.isArray(room.turnOrderPlayerIds) && room.turnOrderPlayerIds.length
+    ? room.turnOrderPlayerIds
+    : active.slice().sort((a, b) => a.seat - b.seat).map(p => p.id);
+  const ordered = order.map(id => byId.get(id)).filter(Boolean);
+  const orderedIds = new Set(ordered.map(p => p.id));
+  const missing = active
+    .filter(p => !orderedIds.has(p.id))
+    .sort((a, b) => a.seat - b.seat);
+  return ordered.concat(missing);
+}
+
 function connectedPlayersInSeatOrder() {
   return room.players
     .filter(p => p.connected)
@@ -690,7 +708,7 @@ function connectedPlayersInSeatOrder() {
 }
 
 function playersAfter(playerId) {
-  const players = activePlayersInSeatOrder();
+  const players = activePlayersInTurnOrder();
   if (!players.length) {
     return [];
   }
@@ -704,6 +722,7 @@ function playersAfter(playerId) {
 function finishGame(reason, toastMessage) {
   room.status = "finished";
   room.currentTurnPlayerId = null;
+  room.turnOrderPlayerIds = [];
   room.pendingDiscardPlayerId = null;
   room.finalTurnPlayerIds = [];
   room.nudgeReadyAt = 0;
@@ -787,52 +806,62 @@ function finalResults() {
       };
     })
     .sort((a, b) => {
-      // First sort by total score (descending)
       if (b.total !== a.total) {
         return b.total - a.total;
       }
-      // If scores are equal, apply tie-breaker
       return compareHandTieBreaker(a, b);
     });
 
   const leaderTotal = rows.length ? rows[0].total : 0;
+  const leader = rows[0] || null;
   return rows.map((row, index) => ({
     ...row,
     rank: index + 1,
-    isWinner: row.total === leaderTotal,
+    isWinner: Boolean(leader && row.total === leaderTotal && compareHandTieBreaker(leader, row) === 0),
     difference: row.total - leaderTotal
   }));
 }
 
 function compareHandTieBreaker(playerA, playerB) {
-  // Get the cards in the winning suit for each player
-  const cardsA = playerA.hand.filter(card => card.suit === playerA.suit);
-  const cardsB = playerB.hand.filter(card => card.suit === playerB.suit);
-
-  // Sort cards by value descending
-  const sortedA = cardsA.slice().sort((a, b) => cardValue(b.value) - cardValue(a.value));
-  const sortedB = cardsB.slice().sort((a, b) => cardValue(b.value) - cardValue(a.value));
-
-  // Compare card by card
+  const sortedA = tieBreakerCards(playerA.hand);
+  const sortedB = tieBreakerCards(playerB.hand);
   const minLength = Math.min(sortedA.length, sortedB.length);
   for (let i = 0; i < minLength; i++) {
-    const valA = cardValue(sortedA[i].value);
-    const valB = cardValue(sortedB[i].value);
-    if (valA !== valB) {
-      return valB - valA; // Higher value wins
+    const rankDiff = tieBreakerRank(sortedB[i].value) - tieBreakerRank(sortedA[i].value);
+    if (rankDiff) {
+      return rankDiff;
     }
   }
-
-  // If all compared cards are identical, use suit ordering
-  const suitOrder = { "\u2660": 0, "\u2665": 1, "\u2666": 2, "\u2663": 3 }; // Spades < Hearts < Diamonds < Clubs
-  const suitIndexA = suitOrder[playerA.suit] ?? 4;
-  const suitIndexB = suitOrder[playerB.suit] ?? 4;
-  if (suitIndexA !== suitIndexB) {
-    return suitIndexA - suitIndexB; // Lower suit index wins
+  if (sortedA.length !== sortedB.length) {
+    return sortedB.length - sortedA.length;
   }
-
-  // If everything is identical, use seat order
+  for (let i = 0; i < sortedA.length; i++) {
+    const suitDiff = suitTieBreakerRank(sortedB[i].suit) - suitTieBreakerRank(sortedA[i].suit);
+    if (suitDiff) {
+      return suitDiff;
+    }
+  }
   return playerA.seat - playerB.seat;
+}
+
+function tieBreakerCards(hand) {
+  return (Array.isArray(hand) ? hand : []).slice().sort((a, b) => {
+    const rankDiff = tieBreakerRank(b.value) - tieBreakerRank(a.value);
+    if (rankDiff) {
+      return rankDiff;
+    }
+    return suitTieBreakerRank(b.suit) - suitTieBreakerRank(a.suit);
+  });
+}
+
+function tieBreakerRank(value) {
+  const order = { A: 14, K: 13, Q: 12, J: 11 };
+  return order[value] || Number(value) || 0;
+}
+
+function suitTieBreakerRank(suit) {
+  const order = { "\u2663": 1, "\u2666": 2, "\u2665": 3, "\u2660": 4 };
+  return order[suit] || 0;
 }
 
 function privateHand(player) {
@@ -972,7 +1001,7 @@ function topCard(cards) {
 }
 
 function nextPlayerAfter(playerId) {
-  const players = activePlayersInSeatOrder();
+  const players = activePlayersInTurnOrder();
   if (!players.length) return null;
   const index = players.findIndex(p => p.id === playerId);
   if (index < 0) return players[0];
@@ -1033,6 +1062,7 @@ function loadSnapshot() {
     for (const player of parsed.players || []) {
       player.connected = false;
     }
+    parsed.turnOrderPlayerIds = Array.isArray(parsed.turnOrderPlayerIds) ? parsed.turnOrderPlayerIds : [];
     parsed.nudgeReadyAt = Number(parsed.nudgeReadyAt) || (Date.now() + NUDGE_COOLDOWN_MS);
     return parsed;
   } catch (error) {

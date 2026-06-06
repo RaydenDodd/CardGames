@@ -1008,7 +1008,10 @@
       dom.resultsList.appendChild(item);
     });
 
+    dom.resultsActions.hidden = !isHost;
     dom.resultsActions.style.display = isHost ? "flex" : "none";
+    dom.playAgainBtn.hidden = !isHost;
+    dom.endSessionResultsBtn.hidden = !isHost;
     dom.resultsPanel.hidden = false;
   }
 
