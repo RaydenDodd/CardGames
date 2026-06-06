@@ -1600,7 +1600,7 @@
   }
 
   function isMobileViewport() {
-    return Boolean(window.matchMedia && window.matchMedia("(max-width: 700px)").matches);
+    return Boolean(window.matchMedia && window.matchMedia("(max-width: 700px) and (pointer: coarse)").matches);
   }
 
   function setConnectionStatus(text) {

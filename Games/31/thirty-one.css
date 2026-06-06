@@ -2347,15 +2347,31 @@
     top:40%;
   }
 
+  .hand-track.hand-track--overflowing,
+  .hand-track.hand-track--edge-fill {
+    padding-left:max(2px, env(safe-area-inset-left));
+    padding-right:max(2px, env(safe-area-inset-right));
+  }
+}
+
+@media (max-width: 700px) and (pointer: coarse) {
   .avatar-seat.opponent-0,
   .avatar-seat.opponent-top {
     top:3%;
   }
 
-  .hand-track.hand-track--overflowing,
-  .hand-track.hand-track--edge-fill {
-    padding-left:max(2px, env(safe-area-inset-left));
-    padding-right:max(2px, env(safe-area-inset-right));
+  .table-scene,
+  .table-zone,
+  .avatar-ring {
+    background:transparent;
+    box-shadow:none;
+  }
+
+  .felt-table {
+    box-shadow:
+      inset 0 0 0 7px rgba(255,255,255,.08),
+      inset 0 -24px 80px rgba(0,0,0,.24),
+      inset 0 24px 80px rgba(221,255,186,.08);
   }
 }
 
