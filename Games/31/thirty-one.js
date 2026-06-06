@@ -212,7 +212,6 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewportChange);
     }
-    dom.handScroller.addEventListener("scroll", applyHandOffset, { passive: true });
     document.addEventListener("pointerdown", handleDocumentPointerDown, true);
   }
 
@@ -728,7 +727,7 @@
           moved: false
         };
         bindActivePointerListeners();
-        if (!isMobileViewport() && typeof cardButton.setPointerCapture === "function") {
+        if (typeof cardButton.setPointerCapture === "function") {
           try {
             cardButton.setPointerCapture(event.pointerId);
           } catch {
@@ -1058,11 +1057,6 @@
   }
 
   function scrollHand(direction) {
-    if (isMobileViewport()) {
-      const distance = Math.max(150, dom.handScroller.clientWidth * 0.72);
-      dom.handScroller.scrollBy({ left: distance * direction, behavior: "smooth" });
-      return;
-    }
     const distance = Math.max(150, dom.handArea.clientWidth * 0.34);
     handOffset = clampNumber(0, handMaxOffset, handOffset + distance * direction);
     applyHandOffset();
@@ -1085,16 +1079,6 @@
       dom.handTrack.classList.remove("hand-track--overflowing", "hand-track--edge-fill");
       handOffset = 0;
       handMaxOffset = 0;
-      applyHandOffset();
-      return;
-    }
-
-    if (isMobileViewport()) {
-      dom.handTrack.style.setProperty("--hand-overlap", "0px");
-      dom.handTrack.style.removeProperty("--hand-spread-width");
-      dom.handTrack.classList.add("hand-track--overflowing", "hand-track--edge-fill");
-      handOffset = 0;
-      handMaxOffset = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
       applyHandOffset();
       return;
     }
@@ -1123,13 +1107,6 @@
   }
 
   function applyHandOffset() {
-    if (isMobileViewport()) {
-      dom.handTrack.style.setProperty("--hand-shift", "0px");
-      const maxScroll = Math.max(0, dom.handScroller.scrollWidth - dom.handScroller.clientWidth);
-      dom.handPrevBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft <= 1;
-      dom.handNextBtn.disabled = maxScroll <= 0 || dom.handScroller.scrollLeft >= maxScroll - 1;
-      return;
-    }
     dom.handTrack.style.setProperty("--hand-shift", `${Math.round(-handOffset)}px`);
     dom.handPrevBtn.disabled = handMaxOffset <= 0 || handOffset <= 1;
     dom.handNextBtn.disabled = handMaxOffset <= 0 || handOffset >= handMaxOffset - 1;
