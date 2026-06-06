@@ -3179,4 +3179,18 @@
   .hand-area {
     bottom:var(--hand-bottom, 34px);
   }
+
+  .table-scene,
+  .table-zone,
+  .avatar-ring {
+    background:transparent;
+    box-shadow:none;
+  }
+
+  .felt-table {
+    box-shadow:
+      inset 0 0 0 7px rgba(255,255,255,.08),
+      inset 0 -24px 80px rgba(0,0,0,.24),
+      inset 0 24px 80px rgba(221,255,186,.08);
+  }
 }
