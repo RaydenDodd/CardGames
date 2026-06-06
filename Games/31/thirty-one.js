@@ -298,7 +298,7 @@
       if (leftRoomThisSession) {
         showJoinPanelNow();
       } else {
-        send("sync", { playerId });
+        send("sync", { playerId, roomCode: getStored(STORAGE.roomCode) });
         scheduleAutoJoin();
       }
     });

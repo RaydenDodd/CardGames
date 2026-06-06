@@ -6,7 +6,10 @@ const { WebSocket, WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_PLAYERS = 10;
+const MAX_ROOMS = 3;
 const NUDGE_COOLDOWN_MS = 10000;
+const ROOM_IDLE_MS = 10 * 60 * 1000;
+const ROOM_CLEANUP_MS = 60 * 1000;
 const SNAPSHOT_PATH = path.join(__dirname, "data", "state.json");
 const HEARTBEAT_MS = 30000;
 const SUITS = [
@@ -17,17 +20,35 @@ const SUITS = [
 ];
 const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
-let room = loadSnapshot();
+let rooms = loadSnapshot();
+let room = null;
 const sockets = new Map();
 
 const app = express();
 app.use(express.json());
 app.get("/health", (_req, res) => {
-  const counts = roomCounts();
+  cleanupInactiveRooms();
+  const roomList = Array.from(rooms.values());
+  const counts = roomList.reduce((total, activeRoom) => {
+    const roomCount = roomCounts(activeRoom.players, activeRoom);
+    total.activeCount += roomCount.activeCount;
+    total.connectedCount += roomCount.connectedCount;
+    total.seatedCount += roomCount.seatedCount;
+    return total;
+  }, { activeCount: 0, connectedCount: 0, seatedCount: 0 });
   res.json({
     ok: true,
     game: "thirty-one",
-    roomCode: room ? room.code : null,
+    roomCode: roomList[0] ? roomList[0].code : null,
+    rooms: roomList.map(activeRoom => ({
+      code: activeRoom.code,
+      status: activeRoom.status,
+      players: roomCounts(activeRoom.players, activeRoom).activeCount,
+      connectedPlayers: roomCounts(activeRoom.players, activeRoom).connectedCount,
+      lastActivityAt: activeRoom.lastActivityAt || activeRoom.createdAt || null
+    })),
+    roomCount: roomList.length,
+    maxRooms: MAX_ROOMS,
     players: counts.activeCount,
     connectedPlayers: counts.connectedCount,
     seatedPlayers: counts.seatedCount
@@ -59,17 +80,21 @@ wss.on("connection", ws => {
   });
 
   ws.on("close", () => {
-    if (ws.playerId) {
+    if (ws.playerId && ws.roomCode) {
       const playerId = ws.playerId;
+      const roomCode = ws.roomCode;
+      const targetRoom = rooms.get(roomCode);
       removeSocket(ws);
-      if (!hasOpenSocket(playerId)) {
+      if (targetRoom && !hasOpenSocket(roomCode, playerId)) {
+        room = targetRoom;
         const player = markDisconnected(playerId);
         broadcast(player ? `${player.name} disconnected.` : undefined);
+        room = null;
       }
     }
   });
 
-  send(ws, "roomState", publicRoom());
+  send(ws, "roomState", publicRoomForSocket(ws));
 });
 
 setInterval(() => {
@@ -83,6 +108,8 @@ setInterval(() => {
   }
 }, HEARTBEAT_MS);
 
+setInterval(cleanupInactiveRooms, ROOM_CLEANUP_MS);
+
 server.listen(PORT, () => {
   console.log(`Thirty One server listening on port ${PORT}`);
 });
@@ -92,6 +119,7 @@ function handleMessage(ws, message) {
   const data = message.data || {};
 
   try {
+    cleanupInactiveRooms();
     if (type === "createRoom") return createRoom(ws, data);
     if (type === "joinRoom") return joinRoom(ws, data);
     if (type === "sync") return syncPlayer(ws, data);
@@ -111,6 +139,8 @@ function handleMessage(ws, message) {
     send(ws, "error", { message: "Unknown action." });
   } catch (error) {
     send(ws, "error", { message: error.message || "Action failed." });
+  } finally {
+    room = null;
   }
 }
 
@@ -118,14 +148,17 @@ function createRoom(ws, data) {
   const playerId = normalizeId(data.playerId) || newId("p");
   const name = normalizeName(data.name);
 
-  if (room && hasConnectedPlayers(room)) {
-    throw new Error("A room is already active. Join that room or ask the host to stop it.");
+  if (rooms.size >= MAX_ROOMS) {
+    throw new Error("The server already has 3 active rooms. Wait for one to clear or ask a host to end a room.");
   }
 
+  const now = Date.now();
   room = {
     code: generateRoomCode(),
     status: "lobby",
     hostId: playerId,
+    createdAt: now,
+    lastActivityAt: now,
     currentTurnPlayerId: null,
     turnOrderPlayerIds: [],
     pendingDiscardPlayerId: null,
@@ -141,27 +174,31 @@ function createRoom(ws, data) {
       name,
       connected: true,
       seat: 0,
-      joinedAt: Date.now(),
-      lastSeen: Date.now(),
+      joinedAt: now,
+      lastSeen: now,
       hand: []
     }]
   };
+  while (rooms.has(room.code)) {
+    room.code = generateRoomCode();
+  }
+  rooms.set(room.code, room);
 
   bindSocket(ws, playerId);
+  touchRoom();
   saveSnapshot();
   send(ws, "toast", { message: `Room ${room.code} created.` });
   broadcast();
+  room = null;
 }
 
 function joinRoom(ws, data) {
-  if (!room) {
-    throw new Error("No room exists yet. Create a room first.");
-  }
-
   const code = String(data.roomCode || "").trim().toUpperCase();
-  if (code !== room.code) {
+  room = rooms.get(code) || null;
+  if (!room) {
     throw new Error("Room code not found.");
   }
+  touchRoom();
   if (room.status !== "playing") {
     pruneInactiveLobbyPlayers();
   }
@@ -217,17 +254,20 @@ function joinRoom(ws, data) {
   player.connected = true;
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
+  touchRoom();
   saveSnapshot();
   broadcast(wasReconnect
     ? `${player.name} rejoined.`
     : joinedNewPlayer
       ? `${player.name} joined the room.`
       : undefined);
+  room = null;
 }
 
 function syncPlayer(ws, data) {
+  room = roomForSync(ws, data);
   if (!room) {
-    send(ws, "roomState", publicRoom());
+    send(ws, "roomState", { room: null });
     return;
   }
 
@@ -246,8 +286,10 @@ function syncPlayer(ws, data) {
   player.connected = true;
   player.lastSeen = Date.now();
   bindSocket(ws, player.id);
+  touchRoom();
   saveSnapshot();
   broadcast(wasReconnect ? `${player.name} rejoined.` : undefined);
+  room = null;
 }
 
 function startGame(player) {
@@ -319,19 +361,8 @@ function resetRoomToLobby(toastMessage) {
 function endSession(player) {
   requireHost(player);
   const message = "The host ended the room.";
-  room = null;
-  sockets.clear();
-  deleteSnapshot();
-
-  for (const ws of wss.clients) {
-    if (ws.readyState !== WebSocket.OPEN) {
-      continue;
-    }
-    ws.playerId = null;
-    send(ws, "sessionEnded", { message });
-    send(ws, "roomState", publicRoom());
-    send(ws, "toast", { message });
-  }
+  closeRoom(room, message);
+  saveSnapshot();
 }
 
 function skipPlayer(player) {
@@ -526,6 +557,7 @@ function markDisconnected(playerId) {
   }
   player.connected = false;
   player.lastSeen = Date.now();
+  touchRoom();
   saveSnapshot();
   return player;
 }
@@ -557,32 +589,34 @@ function reassignPlayerId(player, nextId) {
 }
 
 function bindSocket(ws, playerId) {
-  if (ws.playerId && ws.playerId !== playerId) {
+  if ((ws.playerId && ws.playerId !== playerId) || (ws.roomCode && room && ws.roomCode !== room.code)) {
     removeSocket(ws);
   }
   ws.playerId = playerId;
-  if (!sockets.has(playerId)) {
-    sockets.set(playerId, new Set());
+  ws.roomCode = room.code;
+  const key = socketKey(room.code, playerId);
+  if (!sockets.has(key)) {
+    sockets.set(key, new Set());
   }
-  sockets.get(playerId).add(ws);
+  sockets.get(key).add(ws);
 }
 
 function removeSocket(ws) {
-  if (!ws.playerId) {
+  if (!ws.playerId || !ws.roomCode) {
     return;
   }
-  const playerSockets = sockets.get(ws.playerId);
+  const playerSockets = sockets.get(socketKey(ws.roomCode, ws.playerId));
   if (!playerSockets) {
     return;
   }
   playerSockets.delete(ws);
   if (!playerSockets.size) {
-    sockets.delete(ws.playerId);
+    sockets.delete(socketKey(ws.roomCode, ws.playerId));
   }
 }
 
-function hasOpenSocket(playerId) {
-  const playerSockets = sockets.get(playerId);
+function hasOpenSocket(roomCode, playerId) {
+  const playerSockets = sockets.get(socketKey(roomCode, playerId));
   if (!playerSockets) {
     return false;
   }
@@ -595,7 +629,7 @@ function hasOpenSocket(playerId) {
 }
 
 function detachPlayerSockets(playerId, type, data) {
-  const playerSockets = sockets.get(playerId);
+  const playerSockets = sockets.get(socketKey(room.code, playerId));
   if (!playerSockets) {
     return;
   }
@@ -606,12 +640,14 @@ function detachPlayerSockets(playerId, type, data) {
         ws.suppressNextToast = true;
       }
       ws.playerId = null;
+      ws.roomCode = null;
     }
   }
-  sockets.delete(playerId);
+  sockets.delete(socketKey(room.code, playerId));
 }
 
 function requirePlayer(ws) {
+  room = ws.roomCode ? rooms.get(ws.roomCode) : null;
   if (!room || !ws.playerId) {
     throw new Error("Join a room first.");
   }
@@ -621,6 +657,7 @@ function requirePlayer(ws) {
   }
   player.connected = true;
   player.lastSeen = Date.now();
+  touchRoom();
   return player;
 }
 
@@ -777,11 +814,22 @@ function publicRoom() {
   };
 }
 
-function roomCounts(players = room ? room.players : []) {
+function publicRoomForSocket(ws) {
+  const targetRoom = ws && ws.roomCode ? rooms.get(ws.roomCode) : null;
+  if (!targetRoom) {
+    return { room: null };
+  }
+  room = targetRoom;
+  const state = publicRoom();
+  room = null;
+  return state;
+}
+
+function roomCounts(players = room ? room.players : [], targetRoom = room) {
   const counted = Array.isArray(players) ? players : [];
   return {
     connectedCount: counted.filter(p => p.connected).length,
-    activeCount: counted.filter(p => p.connected || (room && p.id === room.hostId)).length,
+    activeCount: counted.filter(p => p.connected || (targetRoom && p.id === targetRoom.hostId)).length,
     seatedCount: counted.length
   };
 }
@@ -877,7 +925,7 @@ function privateHand(player) {
 function broadcast(toastMessage) {
   const state = publicRoom();
   for (const ws of wss.clients) {
-    if (ws.readyState !== WebSocket.OPEN) {
+    if (ws.readyState !== WebSocket.OPEN || ws.roomCode !== room.code) {
       continue;
     }
     send(ws, "roomState", state);
@@ -904,7 +952,7 @@ function send(ws, type, data) {
 }
 
 function sendToastToPlayer(playerId, message) {
-  const playerSockets = sockets.get(playerId);
+  const playerSockets = sockets.get(socketKey(room.code, playerId));
   if (!playerSockets) {
     return false;
   }
@@ -919,7 +967,7 @@ function sendToastToPlayer(playerId, message) {
 }
 
 function sendNudgeAlertToPlayer(playerId, message) {
-  const playerSockets = sockets.get(playerId);
+  const playerSockets = sockets.get(socketKey(room.code, playerId));
   if (!playerSockets) {
     return false;
   }
@@ -1027,6 +1075,70 @@ function hasConnectedPlayers(targetRoom) {
   return targetRoom.players.some(p => p.connected);
 }
 
+function socketKey(roomCode, playerId) {
+  return `${roomCode}:${playerId}`;
+}
+
+function touchRoom(targetRoom = room) {
+  if (targetRoom) {
+    targetRoom.lastActivityAt = Date.now();
+  }
+}
+
+function roomForSync(ws, data) {
+  const code = String(data.roomCode || ws.roomCode || "").trim().toUpperCase();
+  if (code && rooms.has(code)) {
+    return rooms.get(code);
+  }
+  const playerId = normalizeId(data.playerId || ws.playerId);
+  if (!playerId) {
+    return null;
+  }
+  for (const candidate of rooms.values()) {
+    if (candidate.players.some(p => p.id === playerId)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function closeRoom(targetRoom, message) {
+  if (!targetRoom) {
+    return;
+  }
+  rooms.delete(targetRoom.code);
+  for (const ws of wss.clients) {
+    if (ws.readyState !== WebSocket.OPEN || ws.roomCode !== targetRoom.code) {
+      continue;
+    }
+    ws.playerId = null;
+    ws.roomCode = null;
+    send(ws, "sessionEnded", { message });
+    send(ws, "roomState", { room: null });
+    send(ws, "toast", { message });
+  }
+  for (const key of Array.from(sockets.keys())) {
+    if (key.startsWith(`${targetRoom.code}:`)) {
+      sockets.delete(key);
+    }
+  }
+}
+
+function cleanupInactiveRooms() {
+  const now = Date.now();
+  let changed = false;
+  for (const candidate of Array.from(rooms.values())) {
+    const lastActivityAt = Number(candidate.lastActivityAt || candidate.createdAt || now);
+    if (now - lastActivityAt > ROOM_IDLE_MS) {
+      closeRoom(candidate, "Room closed after 10 minutes with no activity.");
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveSnapshot();
+  }
+}
+
 function normalizeName(name) {
   const clean = String(name || "").trim().replace(/\s+/g, " ").slice(0, 24);
   if (!clean) {
@@ -1056,28 +1168,39 @@ function generateRoomCode() {
 function loadSnapshot() {
   try {
     if (!fs.existsSync(SNAPSHOT_PATH)) {
-      return null;
+      return new Map();
     }
     const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8"));
-    for (const player of parsed.players || []) {
-      player.connected = false;
+    const list = Array.isArray(parsed.rooms) ? parsed.rooms : (parsed && parsed.code ? [parsed] : []);
+    const restored = new Map();
+    for (const candidate of list.slice(0, MAX_ROOMS)) {
+      if (!candidate || !candidate.code) {
+        continue;
+      }
+      for (const player of candidate.players || []) {
+        player.connected = false;
+      }
+      candidate.turnOrderPlayerIds = Array.isArray(candidate.turnOrderPlayerIds) ? candidate.turnOrderPlayerIds : [];
+      candidate.nudgeReadyAt = Number(candidate.nudgeReadyAt) || (Date.now() + NUDGE_COOLDOWN_MS);
+      candidate.createdAt = Number(candidate.createdAt) || Date.now();
+      candidate.lastActivityAt = Number(candidate.lastActivityAt) || candidate.createdAt;
+      restored.set(candidate.code, candidate);
     }
-    parsed.turnOrderPlayerIds = Array.isArray(parsed.turnOrderPlayerIds) ? parsed.turnOrderPlayerIds : [];
-    parsed.nudgeReadyAt = Number(parsed.nudgeReadyAt) || (Date.now() + NUDGE_COOLDOWN_MS);
-    return parsed;
+    return restored;
   } catch (error) {
     console.error("Failed to load snapshot:", error);
-    return null;
+    return new Map();
   }
 }
 
 function saveSnapshot() {
-  if (!room) {
+  if (!rooms.size) {
+    deleteSnapshot();
     return;
   }
   try {
     fs.mkdirSync(path.dirname(SNAPSHOT_PATH), { recursive: true });
-    const snapshot = JSON.parse(JSON.stringify(room));
+    const snapshot = { rooms: Array.from(rooms.values()).map(activeRoom => JSON.parse(JSON.stringify(activeRoom))) };
     fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
   } catch (error) {
     console.error("Failed to save snapshot:", error);
