@@ -628,7 +628,7 @@
 
     window.setTimeout(() => {
       reveal.remove();
-    }, 1100);
+    }, 1550);
   }
 
   function renderAvatars() {
