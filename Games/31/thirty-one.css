@@ -3390,3 +3390,27 @@ html {
     bottom:max(1px, calc(env(safe-area-inset-bottom) - 26px));
   }
 }
+
+@media (max-width: 700px) and (pointer: coarse) {
+  .game-stage {
+    --stable-scene-w:min(112vw, 560px);
+    --stable-scene-ratio:1.72 / 1;
+  }
+
+  .table-scene {
+    --pile-card-size:.38;
+  }
+
+  .table-zone {
+    width:100%;
+    height:58%;
+  }
+
+  .stock-pile {
+    left:36.5%;
+  }
+
+  .discard-pile {
+    left:63.5%;
+  }
+}
