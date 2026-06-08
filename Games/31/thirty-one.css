@@ -2825,6 +2825,31 @@
   transform:none !important;
 }
 
+/* Lift the table piles toward the player so the discard face stays readable. */
+.pile-stack {
+  perspective:620px;
+  perspective-origin:50% 100%;
+}
+
+.pile-top-card {
+  transform-style:preserve-3d;
+  transform-origin:center 92%;
+}
+
+.stock-pile .pile-top-card {
+  transform:rotateX(-10deg) translateY(calc(var(--pile-depth) * -.08));
+}
+
+.discard-pile .pile-top-card {
+  transform:rotateX(-18deg) translateY(calc(var(--pile-depth) * -.10)) scale(1.04);
+}
+
+.stock-pile .pile-card .pile-top-card .playing-card,
+.discard-pile .pile-card .pile-top-card .playing-card {
+  backface-visibility:hidden;
+  transform:none !important;
+}
+
 /* End-game controls and scoreboard. */
 .host-controls {
   flex-wrap:wrap;
