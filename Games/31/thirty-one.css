@@ -2023,7 +2023,7 @@
   --discard-reveal-rise:178px;
   transform:translate(-50%, -50%) scale(.30);
   opacity:0;
-  animation:discard-card-float 1900ms cubic-bezier(.15, .82, .25, 1) forwards;
+  animation:discard-card-float 1620ms cubic-bezier(.20, .72, .24, 1) forwards;
   filter:drop-shadow(0 18px 28px rgba(0,0,0,.36));
 }
 
@@ -2042,19 +2042,23 @@
 @keyframes discard-card-float {
   0% {
     opacity:0;
-    transform:translate(-50%, -18%) scale(.18);
+    transform:translate(-50%, -16%) scale(.22);
   }
-  20% {
-    opacity:1;
-    transform:translate(-50%, calc(-50% - 12px)) scale(.72);
+  18% {
+    opacity:.96;
+    transform:translate(-50%, calc(-50% - 10px)) scale(.66);
   }
-  36% {
-    opacity:1;
-    transform:translate(-50%, calc(-50% - 34px)) scale(1);
+  34% {
+    opacity:.96;
+    transform:translate(-50%, calc(-50% - 34px)) scale(.94);
+  }
+  52% {
+    opacity:.88;
+    transform:translate(-50%, calc(-50% - 72px)) scale(1);
   }
   100% {
     opacity:0;
-    transform:translate(-50%, calc(-50% - var(--discard-reveal-rise))) scale(1.05);
+    transform:translate(-50%, calc(-50% - var(--discard-reveal-rise))) scale(1.04);
   }
 }
 
