@@ -3393,24 +3393,48 @@ html {
 
 @media (max-width: 700px) and (pointer: coarse) {
   .game-stage {
-    --stable-scene-w:min(112vw, 560px);
-    --stable-scene-ratio:1.72 / 1;
+    --stable-scene-w:min(96vw, 430px);
+    --stable-scene-ratio:1.12 / 1;
   }
 
   .table-scene {
-    --pile-card-size:.38;
+    top:39%;
+    --pile-card-size:.36;
   }
 
   .table-zone {
-    width:100%;
-    height:58%;
+    top:58%;
+    width:95%;
+    height:70%;
+  }
+
+  .felt-table {
+    transform:rotateX(38deg);
+  }
+
+  .pile {
+    transform:translate(-50%, -50%) rotateX(-38deg);
+  }
+
+  .pile.pile--ready:hover {
+    transform:translate(-50%, -53%) rotateX(-38deg) scale(1.03);
   }
 
   .stock-pile {
-    left:36.5%;
+    left:38.5%;
   }
 
   .discard-pile {
-    left:63.5%;
+    left:61.5%;
+  }
+
+  .avatar-seat.opponent-1,
+  .avatar-seat.opponent-left {
+    left:14%;
+  }
+
+  .avatar-seat.opponent-2,
+  .avatar-seat.opponent-right {
+    right:14%;
   }
 }
