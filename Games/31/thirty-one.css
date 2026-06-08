@@ -211,6 +211,22 @@
   font-weight:700;
 }
 
+.turn-card .turn-card-meta {
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.turn-card .table-card-status {
+  color:rgba(248,250,252,.94);
+  font-weight:900;
+}
+
+.turn-card .table-card-status.red-card-status {
+  color:#ff8a8a;
+}
+
 .score-card {
   position:absolute;
   right:max(18px, env(safe-area-inset-right));

@@ -19,6 +19,7 @@
     currentPlayer: document.getElementById("currentPlayer"),
     nextPlayer: document.getElementById("nextPlayer"),
     playerCount: document.getElementById("playerCount"),
+    tableCardStatus: document.getElementById("tableCardStatus"),
     avatarRing: document.getElementById("avatarRing"),
     feltTable: document.querySelector(".felt-table"),
     stockPile: document.getElementById("stockPile"),
@@ -550,6 +551,27 @@
       dom.currentPlayer.textContent = roomState ? "Waiting for start" : "Waiting for host";
     }
     dom.nextPlayer.textContent = roomState && roomState.nextPlayerName ? roomState.nextPlayerName : "--";
+    renderTableCardStatus();
+  }
+
+  function renderTableCardStatus() {
+    if (!dom.tableCardStatus) {
+      return;
+    }
+
+    const card = roomState ? roomState.discardTop : null;
+    if (!card) {
+      dom.tableCardStatus.hidden = true;
+      dom.tableCardStatus.textContent = "";
+      dom.tableCardStatus.classList.remove("red-card-status");
+      return;
+    }
+
+    const value = String(card.value || card.rank || "");
+    const suit = card.suit || "";
+    dom.tableCardStatus.textContent = ` \u00b7 Table: ${value}${suit}`;
+    dom.tableCardStatus.hidden = false;
+    dom.tableCardStatus.classList.toggle("red-card-status", RED_SUITS.has(suit));
   }
 
   function renderTable() {
