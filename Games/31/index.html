@@ -6,7 +6,7 @@
   <title>31 / Blitz</title>
   <link rel="stylesheet" href="../../style.css" />
   <link rel="stylesheet" href="../../card-renderer.css" />
-  <link rel="stylesheet" href="thirty-one.css?v=table-card-status-1" />
+  <link rel="stylesheet" href="thirty-one.css?v=score-card-toggle-1" />
 </head>
 <body class="thirty-one-page">
   <main class="game-stage" aria-label="31 / Blitz game table">
@@ -21,11 +21,11 @@
     <section class="turn-card">
       <span id="connectionStatus">Connecting...</span>
       <strong id="currentPlayer">Waiting for host</strong>
-      <span class="turn-card-meta">Next: <b id="nextPlayer">--</b> &middot; <b id="playerCount">0/10</b><span id="tableCardStatus" class="table-card-status" hidden></span></span>
+      <span>Next: <b id="nextPlayer">--</b> &middot; <b id="playerCount">0/10</b></span>
     </section>
 
-    <section class="score-card">
-      <span class="label">Your Best</span>
+    <section class="score-card" id="scoreCard" role="button" tabindex="0" aria-label="Toggle score display">
+      <span id="scoreLabel" class="label">Your Best</span>
       <strong id="bestScore">0</strong>
       <button id="helpBtn" class="trophy-button" type="button">?</button>
     </section>
@@ -142,6 +142,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="../../card-renderer.js"></script>
-  <script src="thirty-one.js?v=table-card-status-1"></script>
+  <script src="thirty-one.js?v=score-card-toggle-1"></script>
 </body>
 </html>

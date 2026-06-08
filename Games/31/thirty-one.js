@@ -19,7 +19,6 @@
     currentPlayer: document.getElementById("currentPlayer"),
     nextPlayer: document.getElementById("nextPlayer"),
     playerCount: document.getElementById("playerCount"),
-    tableCardStatus: document.getElementById("tableCardStatus"),
     avatarRing: document.getElementById("avatarRing"),
     feltTable: document.querySelector(".felt-table"),
     stockPile: document.getElementById("stockPile"),
@@ -28,6 +27,8 @@
     discardPile: document.getElementById("discardPile"),
     discardCard: document.getElementById("discardCard"),
     discardCount: document.getElementById("discardCount"),
+    scoreCard: document.getElementById("scoreCard"),
+    scoreLabel: document.getElementById("scoreLabel"),
     bestScore: document.getElementById("bestScore"),
     turnHint: document.getElementById("turnHint"),
     hostControls: document.getElementById("hostControls"),
@@ -102,6 +103,7 @@
   let dragFrame = 0;
   let pointerState = null;
   let suppressClickCardId = "";
+  let scoreCardMode = "best";
 
   const playerId = ensurePlayerId();
   const serverUrl = resolveServerUrl();
@@ -184,6 +186,21 @@
 
     dom.helpBtn.addEventListener("click", () => {
       dom.helpPanel.hidden = false;
+    });
+
+    dom.scoreCard.addEventListener("click", event => {
+      if (event.target.closest("#helpBtn")) {
+        return;
+      }
+      toggleScoreCardMode();
+    });
+
+    dom.scoreCard.addEventListener("keydown", event => {
+      if (event.target.closest("#helpBtn") || (event.key !== "Enter" && event.key !== " ")) {
+        return;
+      }
+      event.preventDefault();
+      toggleScoreCardMode();
     });
 
     dom.closeHelpBtn.addEventListener("click", () => {
@@ -551,27 +568,6 @@
       dom.currentPlayer.textContent = roomState ? "Waiting for start" : "Waiting for host";
     }
     dom.nextPlayer.textContent = roomState && roomState.nextPlayerName ? roomState.nextPlayerName : "--";
-    renderTableCardStatus();
-  }
-
-  function renderTableCardStatus() {
-    if (!dom.tableCardStatus) {
-      return;
-    }
-
-    const card = roomState ? roomState.discardTop : null;
-    if (!card) {
-      dom.tableCardStatus.hidden = true;
-      dom.tableCardStatus.textContent = "";
-      dom.tableCardStatus.classList.remove("red-card-status");
-      return;
-    }
-
-    const value = String(card.value || card.rank || "");
-    const suit = card.suit || "";
-    dom.tableCardStatus.textContent = ` \u00b7 Table: ${value}${suit}`;
-    dom.tableCardStatus.hidden = false;
-    dom.tableCardStatus.classList.toggle("red-card-status", RED_SUITS.has(suit));
   }
 
   function renderTable() {
@@ -803,9 +799,30 @@
     dom.checkBtn.disabled = !checkReady;
     dom.checkBtn.classList.toggle("check-ready", checkReady);
 
+    renderScoreCard(best);
+    dom.turnHint.textContent = turnHint();
+  }
+
+  function toggleScoreCardMode() {
+    scoreCardMode = scoreCardMode === "best" ? "table" : "best";
+    renderScoreCard(privateState.best || { total: 0, suit: "" });
+  }
+
+  function renderScoreCard(best) {
+    if (scoreCardMode === "table") {
+      const card = roomState ? roomState.discardTop : null;
+      const suit = card ? card.suit || "" : "";
+      dom.scoreLabel.textContent = "Table Card";
+      dom.bestScore.textContent = card ? `${String(card.value || card.rank || "")} ${suit}` : "None";
+      dom.bestScore.classList.toggle("red-score", RED_SUITS.has(suit));
+      dom.scoreCard.classList.add("score-card--table");
+      return;
+    }
+
+    dom.scoreLabel.textContent = "Your Best";
     dom.bestScore.textContent = best.suit ? `${best.total} ${best.suit}` : "0";
     dom.bestScore.classList.toggle("red-score", RED_SUITS.has(best.suit));
-    dom.turnHint.textContent = turnHint();
+    dom.scoreCard.classList.remove("score-card--table");
   }
 
   function turnHint() {

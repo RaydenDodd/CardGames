@@ -211,22 +211,6 @@
   font-weight:700;
 }
 
-.turn-card .turn-card-meta {
-  max-width:100%;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-
-.turn-card .table-card-status {
-  color:rgba(248,250,252,.94);
-  font-weight:900;
-}
-
-.turn-card .table-card-status.red-card-status {
-  color:#ff8a8a;
-}
-
 .score-card {
   position:absolute;
   right:max(18px, env(safe-area-inset-right));
@@ -235,6 +219,8 @@
   width:clamp(150px, 19vw, 230px);
   padding:clamp(13px, 1.35vw, 18px) clamp(58px, 5.8vw, 82px) clamp(13px, 1.35vw, 18px) clamp(15px, 1.5vw, 22px);
   border-radius:28px;
+  cursor:pointer;
+  user-select:none;
 }
 
 .score-card strong {
@@ -247,6 +233,15 @@
 
 .score-card strong.red-score {
   color:#f36f63;
+}
+
+.score-card:focus-visible {
+  outline:2px solid rgba(196,241,134,.74);
+  outline-offset:4px;
+}
+
+.score-card--table {
+  border-color:rgba(196,241,134,.22);
 }
 
 .trophy-button {
