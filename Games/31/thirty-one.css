@@ -2825,35 +2825,6 @@
   transform:none !important;
 }
 
-.discard-pile .pile-card .pile-top-card .playing-card {
-  --card-size:calc(var(--pile-card-size) * 1.18);
-  width:calc(245px * var(--card-size)) !important;
-  transform:
-    translate(
-      calc(var(--pile-card-width) * -.075),
-      calc(var(--pile-card-width) * -.035)
-    )
-    rotate(-1deg) !important;
-  transform-origin:center center;
-  box-shadow:
-    0 2px 0 rgba(255,255,255,.48),
-    calc(var(--layer-step-x) + var(--layer-step-x)) calc(var(--layer-step-y) + var(--layer-step-y)) 0 rgba(135,126,104,.22),
-    0 18px 26px rgba(0,0,0,.36),
-    0 0 0 2px rgba(255,255,255,.20);
-}
-
-@media (max-width: 700px) {
-  .discard-pile .pile-card .pile-top-card .playing-card {
-    --card-size:calc(var(--pile-card-size) * 1.24);
-    transform:
-      translate(
-        calc(var(--pile-card-width) * -.11),
-        calc(var(--pile-card-width) * -.045)
-      )
-      rotate(-1deg) !important;
-  }
-}
-
 /* End-game controls and scoreboard. */
 .host-controls {
   flex-wrap:wrap;
