@@ -473,44 +473,6 @@
   font-size:clamp(10px, calc(var(--pile-card-size) * 26px), 13px);
 }
 
-.discard-readout {
-  position:absolute;
-  left:61%;
-  top:41%;
-  z-index:30;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width:clamp(44px, calc(var(--pile-card-width) * .52), 72px);
-  min-height:clamp(29px, calc(var(--pile-card-width) * .28), 42px);
-  padding:5px 12px;
-  border:1px solid rgba(20,20,20,.18);
-  border-radius:999px;
-  color:#141414;
-  background:
-    radial-gradient(circle at 22% 18%, rgba(255,255,255,.92), transparent 34%),
-    linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,241,229,.96));
-  box-shadow:
-    0 11px 22px rgba(0,0,0,.34),
-    inset 0 0 0 2px rgba(255,255,255,.72);
-  font-family:Georgia, "Times New Roman", serif;
-  font-size:clamp(18px, calc(var(--pile-card-size) * 58px), 28px);
-  font-weight:900;
-  line-height:1;
-  letter-spacing:0;
-  transform:translate(-50%, -50%);
-  pointer-events:none;
-  text-shadow:0 1px 0 rgba(255,255,255,.62);
-}
-
-.discard-readout--red {
-  color:#c82925;
-}
-
-.discard-readout[hidden] {
-  display:none !important;
-}
-
 .pile-card {
   position:relative;
   display:grid;
@@ -2861,6 +2823,35 @@
   inset:0;
   z-index:50;
   transform:none !important;
+}
+
+.discard-pile .pile-card .pile-top-card .playing-card {
+  --card-size:calc(var(--pile-card-size) * 1.18);
+  width:calc(245px * var(--card-size)) !important;
+  transform:
+    translate(
+      calc(var(--pile-card-width) * -.075),
+      calc(var(--pile-card-width) * -.035)
+    )
+    rotate(-1deg) !important;
+  transform-origin:center center;
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.48),
+    calc(var(--layer-step-x) + var(--layer-step-x)) calc(var(--layer-step-y) + var(--layer-step-y)) 0 rgba(135,126,104,.22),
+    0 18px 26px rgba(0,0,0,.36),
+    0 0 0 2px rgba(255,255,255,.20);
+}
+
+@media (max-width: 700px) {
+  .discard-pile .pile-card .pile-top-card .playing-card {
+    --card-size:calc(var(--pile-card-size) * 1.24);
+    transform:
+      translate(
+        calc(var(--pile-card-width) * -.11),
+        calc(var(--pile-card-width) * -.045)
+      )
+      rotate(-1deg) !important;
+  }
 }
 
 /* End-game controls and scoreboard. */
