@@ -440,6 +440,7 @@
         resetLeftRoomView();
         return;
       }
+      const previousRoomState = roomState;
       roomState = data.room || null;
       if (!roomState) {
         privateState = {
@@ -474,6 +475,7 @@
         requestJoinPanel();
       }
       render();
+      maybeShowDiscardReveal(previousRoomState, roomState);
       return;
     }
 
@@ -593,6 +595,40 @@
     dom.discardPile.disabled = !canDrawNow || !discardTop;
     dom.stockPile.classList.toggle("pile--ready", canDrawNow && stockCount > 0);
     dom.discardPile.classList.toggle("pile--ready", canDrawNow && Boolean(discardTop));
+  }
+
+  function maybeShowDiscardReveal(previous, current) {
+    if (!previous || !current || previous.code !== current.code || previous.status !== "playing") {
+      return;
+    }
+
+    const card = current.discardTop;
+    if (!card || current.discardCount <= (Number(previous.discardCount) || 0)) {
+      return;
+    }
+    if (previous.discardTop && previous.discardTop.id === card.id) {
+      return;
+    }
+
+    showDiscardReveal(card);
+  }
+
+  function showDiscardReveal(card) {
+    if (!card || !dom.stage || !dom.discardPile) {
+      return;
+    }
+
+    const pileRect = dom.discardPile.getBoundingClientRect();
+    const reveal = document.createElement("div");
+    reveal.className = "discard-reveal";
+    reveal.style.left = `${pileRect.left + pileRect.width / 2}px`;
+    reveal.style.top = `${pileRect.top + pileRect.height / 2}px`;
+    reveal.appendChild(CardRenderer.renderCard(card, CARD_RENDER_OPTIONS));
+    dom.stage.appendChild(reveal);
+
+    window.setTimeout(() => {
+      reveal.remove();
+    }, 1100);
   }
 
   function renderAvatars() {

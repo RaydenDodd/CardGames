@@ -465,15 +465,16 @@ function discardCard(player, data) {
   const [card] = player.hand.splice(index, 1);
   room.discard.push(card);
   room.pendingDiscardPlayerId = null;
+  const discardMessage = `${player.name} discarded ${formatCard(card)}.`;
   if (!room.stock.length) {
-    finishGame("deck", "The deck ran out.");
+    finishGame("deck", `${discardMessage} The deck ran out.`);
     return;
   }
-  if (completeTurn(player)) {
+  if (completeTurn(player, `${discardMessage} Final turns are complete.`)) {
     return;
   }
   saveSnapshot();
-  broadcast(`${player.name} discarded.`);
+  broadcast(discardMessage);
 }
 
 function leaveSeat(player) {
@@ -793,11 +794,11 @@ function advanceTurn() {
   resetNudgeTimer();
 }
 
-function completeTurn(player) {
+function completeTurn(player, finalToastMessage) {
   if (player && Array.isArray(room.finalTurnPlayerIds) && room.finalTurnPlayerIds.length) {
     room.finalTurnPlayerIds = room.finalTurnPlayerIds.filter(id => id !== player.id);
     if (!room.finalTurnPlayerIds.length) {
-      finishGame("check", "Final turns are complete.");
+      finishGame("check", finalToastMessage || "Final turns are complete.");
       return true;
     }
     room.currentTurnPlayerId = room.finalTurnPlayerIds[0];
@@ -1133,6 +1134,13 @@ function cardValue(value) {
   if (value === "A") return 11;
   if (["J", "Q", "K"].includes(value)) return 10;
   return Number(value) || 0;
+}
+
+function formatCard(card) {
+  if (!card) {
+    return "a card";
+  }
+  return `${card.value}${card.suit}`;
 }
 
 function topCard(cards) {
