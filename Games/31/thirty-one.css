@@ -2021,16 +2021,16 @@
   z-index:235;
   pointer-events:none;
   --discard-reveal-rise:178px;
-  transform:translate(-50%, -50%) scale(.52);
+  transform:translate(-50%, -50%) scale(.30);
   opacity:0;
-  animation:discard-card-float 1450ms cubic-bezier(.16, .86, .22, 1) forwards;
+  animation:discard-card-float 1900ms cubic-bezier(.15, .82, .25, 1) forwards;
   filter:drop-shadow(0 18px 28px rgba(0,0,0,.36));
 }
 
 .discard-reveal .playing-card {
   --card-size:.41;
   width:calc(245px * var(--card-size));
-  opacity:.68;
+  opacity:.80;
   transform:none;
   box-shadow:
     0 16px 30px rgba(0,0,0,.28),
@@ -2042,15 +2042,19 @@
 @keyframes discard-card-float {
   0% {
     opacity:0;
-    transform:translate(-50%, -24%) scale(.42);
+    transform:translate(-50%, -18%) scale(.18);
   }
-  16% {
+  20% {
     opacity:1;
-    transform:translate(-50%, calc(-50% - 22px)) scale(.82);
+    transform:translate(-50%, calc(-50% - 12px)) scale(.72);
+  }
+  36% {
+    opacity:1;
+    transform:translate(-50%, calc(-50% - 34px)) scale(1);
   }
   100% {
     opacity:0;
-    transform:translate(-50%, calc(-50% - var(--discard-reveal-rise))) scale(1.04);
+    transform:translate(-50%, calc(-50% - var(--discard-reveal-rise))) scale(1.05);
   }
 }
 
