@@ -27,6 +27,7 @@
     discardPile: document.getElementById("discardPile"),
     discardCard: document.getElementById("discardCard"),
     discardCount: document.getElementById("discardCount"),
+    discardReadout: document.getElementById("discardReadout"),
     bestScore: document.getElementById("bestScore"),
     turnHint: document.getElementById("turnHint"),
     hostControls: document.getElementById("hostControls"),
@@ -569,12 +570,34 @@
       count: discardCount,
       topCard: discardTop ? CardRenderer.renderCard(discardTop, CARD_RENDER_OPTIONS) : emptyPile("Empty")
     });
+    renderDiscardReadout(discardTop);
 
     const canDrawNow = canDraw();
     dom.stockPile.disabled = !canDrawNow || stockCount < 1;
     dom.discardPile.disabled = !canDrawNow || !discardTop;
     dom.stockPile.classList.toggle("pile--ready", canDrawNow && stockCount > 0);
     dom.discardPile.classList.toggle("pile--ready", canDrawNow && Boolean(discardTop));
+  }
+
+  function renderDiscardReadout(card) {
+    if (!dom.discardReadout) {
+      return;
+    }
+
+    if (!card) {
+      dom.discardReadout.hidden = true;
+      dom.discardReadout.textContent = "";
+      dom.discardReadout.classList.remove("discard-readout--red");
+      dom.discardPile.setAttribute("aria-label", "Draw from dead pile");
+      return;
+    }
+
+    const value = String(card.value || card.rank || "");
+    const suit = card.suit || "";
+    dom.discardReadout.textContent = `${value}${suit}`;
+    dom.discardReadout.hidden = false;
+    dom.discardReadout.classList.toggle("discard-readout--red", RED_SUITS.has(suit));
+    dom.discardPile.setAttribute("aria-label", `Draw from dead pile: ${value} ${suit}`);
   }
 
   function renderAvatars() {
